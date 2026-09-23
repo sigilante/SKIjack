@@ -1,0 +1,19 @@
+[package]
+name = "skijack"
+version = "0.2.0"
+edition = "2021"
+description = "A supercombinator surface language over the SKI calculus, compiling to closed {S,K,I} terms (Rust port)"
+license = "MIT"
+
+[dependencies]
+indexmap = "2"
+sha2 = "0.10"
+
+[[bin]]
+name = "skijack"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

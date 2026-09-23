@@ -23,6 +23,10 @@ A supercombinator language over the $SKI$ combinatory logic and a graph-reductio
 - `RUNTIME-DESIGN.md`: why a Turner-style reducer with jets is required, what it must reproduce, and what it must not do.
 - `avon/DESIGN.md`: the build plan for the C runtime — the measurement that fixes its acceptance test (sharing changes the paper's counts and not its values, so Avon carries two strategies), the node and arena representation, jets as loader-installed wrappers rather than runtime hashing, the conformance harness, and eight stages with what each one has to prove. `avon/bench/strategies.py` reproduces the measurement, and `avon/bench/jets.py` lists the structures the compiled corpus repeats most, the candidates for jets.
 
+- `rust/`: a Rust port of `skijack`, conformant with the reference implementation to the byte on
+  every corpus program, flag and run of the CLI (`rust/tests/golden.manifest` pins 2,200 reference
+  invocations); its README records the measured speed-ups against the Python reference.
+
 - `editors/vscode/`: syntax highlighting for `.ski` in VS Code, both lexicons, driven by the token table; symlink it into `~/.vscode/extensions/` (its README says how).
 
 - `python/`: `skijack`, the reference implementation in Python on `aviary-kernel`: the two lexers over one token table, one parser, renderers for both lexicons, the expander through bracket abstraction, and behavioral probes; `python/README.md` records every decision taken and what its test suite proves. Its corpus under `python/skijack/corpus/` is written in both spellings and is also Avon's conformance suite: the C runtime is correct when it reproduces `skijack`'s terms and decoded values on every file there, and the reference host's contraction counts under its faithful strategy (`avon/DESIGN.md` §1).
