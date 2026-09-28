@@ -8,7 +8,7 @@ import pytest
 from aviary_kernel.terms import App, Atom
 
 from skijack.dictionary import structural_hash
-from skijack.export import dictionary, jam, targets
+from skijack.export import dictionary, interpreters, jam, targets
 
 S, K, I = Atom("S"), Atom("K"), Atom("I")
 
@@ -100,3 +100,21 @@ def test_the_dictionary_export():
     assert all(h in rows for _stem, _name, h in names)
     whnff = [h for stem, name, h in names if (stem, name) == ("interp-whnff", "whnfF")]
     assert len(whnff) == 1 and rows[whnff[0]][0] == 618   # the paper's 618 atoms
+
+
+def test_the_interpreters_export():
+    """interpreters.tsv, for Avon's interpreter jet: every generated
+    interpreter core of the corpus, its arms classified by running them."""
+    lines = interpreters()
+    cores = {l.split("\t")[1].split(".")[-1]: l.split("\t") for l in lines
+             if not l.startswith("nat\t")}
+    assert set(cores) == {"whnfF", "wf5Abs", "wf5Omg", "wfQ", "wfN"}
+    roles = {name: [t.split("/")[0] for t in f[3].split()] for name, f in cores.items()}
+    assert roles["whnfF"] == ["S", "K", "I", "App"]
+    assert roles["wf5Abs"][4] == "err1"         # Errd maps to RErr
+    assert roles["wf5Omg"][4] == "diverge"      # omega: host divergence
+    assert roles["wfQ"][4] == roles["wfN"][4] == "scry"
+    assert cores["wfQ"][5] == "miss1 hit"       # maybe: Nothing | Just
+    assert cores["wfN"][5] == "hit miss1 notyet3"
+    assert cores["wfN"][2] == "1"               # the resolver
+    assert sum(l.startswith("nat\t") for l in lines) == 1
