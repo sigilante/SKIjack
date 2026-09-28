@@ -229,6 +229,44 @@ type variables and type applications are not spellable in one
   `aviary-kernel` does not permit redefinition of its birds but the names
   do not reach the output in any case.)
 
+### 4.1 Kernels: the door
+
+A **kernel** is a value of one shape, Arvo's, which the runtime reads
+without knowing any name in the program. It is a door, a cell
+`[battery state]`, and the battery is a cell of three arms:
+
+| axis of the kernel | holds | signature |
+|---|---|---|
+| 4 | `poke` | `kernel -> event -> [effects kernel']` |
+| 10 | `peek` | `kernel -> path -> answer` |
+| 11 | `load` | `kernel -> old-state -> kernel'` |
+| 3 | the state | — |
+
+So a kernel is written `[[poke [peek load]] state]`.
+
+- **Pull.** The runtime selects an arm by axis and applies it to the
+  whole kernel, then to the argument: `(4@k) k ev`. This is Nock 9's
+  convention, `[9 axis 0 1]` with the core as its own subject. An arm
+  reaches its own battery as `2@k` and its state as `3@k`, so no arm
+  needs a name for its own kernel, and §3.3's rule that a core cannot
+  name itself costs nothing here.
+- **Poke** returns a whole kernel. A kernel that keeps its battery
+  returns `[(2@k) state']`; one that upgrades returns a different battery,
+  which is how the kernel replaces its own code.
+- **Load** puts the receiving kernel's battery over a state it did not
+  build. The runtime upgrades by pulling `load` from the new kernel with
+  the old kernel's state (`3@k`), and the new battery migrates it.
+- **Selection is not inspection.** An axis applies a selector to a Scott
+  pair; the runtime never reads a term's application tree, so a kernel is
+  as opaque to the runtime as any other value (§7 of
+  `SURFACE-LANGUAGE-DESIGN.md`).
+- **Boot.** A program the runtime boots as a kernel reduces, applied to
+  the initial subject, to this shape (`RUNTIME-DESIGN.md` §3b).
+
+Events, effects, paths, answers and states are the program's own types;
+the shape fixes only where the arms and the state sit
+(`test_examples::test_a_runtime_can_poke_the_kernel_with_events_it_builds`).
+
 ## 5. Names and tiers
 
 Names resolve in a compile-time table and are gone before anything runs.

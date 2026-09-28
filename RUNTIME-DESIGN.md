@@ -132,19 +132,21 @@ needs to be known to start a program. The initial subject carries the
 quoted standard library (`SURFACE-LANGUAGE-DESIGN.md` §6b), so this also
 settles who supplies `<subject>`: the runtime, at boot.
 
-A **kernel** is a core with a declared interface the runtime pulls by
-name, Arvo's shape at small scale:
-- `poke`: event → new kernel and a list of effects. (A core cannot name
-  itself in its own equations, so as written today `poke` returns the
-  new *state* and the runtime re-applies `poke` to it; the worked form is
-  `python/skijack/corpus/kernel-events.ascii.ski`, and the loop that pokes
-  it is `tests/test_examples.py`.)
-- `peek`: path → answer, which is the scry namespace of `SYNTAX.md` §6,
-  served to level-1 programs that `∵`.
+A **kernel** is a door in Arvo's shape (`SPEC.md` §4.1): a cell
+`[battery state]` whose battery holds three arms at fixed axes, which the
+runtime pulls by axis and applies to the whole kernel, as Nock 9 does:
+- `poke` (axis 4): kernel → event → `[effects kernel']`;
+- `peek` (axis 10): kernel → path → answer, which is the scry namespace
+  of `SYNTAX.md` §6, served to level-1 programs that `∵`;
+- `load` (axis 11): kernel → old state → kernel', the upgrade path.
 
-The runtime's loop: apply `poke` to the event, install the result, serve
-`peek` to anything that scries, emit the effects. A program that is not
-a kernel is just a term applied once to the initial subject.
+An arm reaches its own battery and state by axis, so no arm names its
+kernel. The worked form is `python/skijack/corpus/kernel-events.ascii.ski`,
+and the loop that pokes it is `tests/test_examples.py`.
+
+The runtime's loop: pull `poke`, apply it to the kernel and the event,
+install the kernel it returns, serve `peek` to anything that scries,
+emit the effects. A program that is not a kernel is just a term applied once to the initial subject.
 
 ## 3c. Fuel policy
 

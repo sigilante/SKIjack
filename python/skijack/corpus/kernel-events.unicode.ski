@@ -1,8 +1,9 @@
-⍝ An event type and a kernel, Arvo's shape at small scale
-⍝ (RUNTIME-DESIGN.md section 3b): the runtime builds an event datum from
-⍝ the program's own constructors, applies poke to the state and the
-⍝ event, installs the new state, and emits the effects.  Nothing is
-⍝ reified; the runtime constructs data and applies.
+⍝ An event type and a kernel in Arvo's shape: a door [battery state]
+⍝ (SPEC.md section 4.1).  The battery holds the arms poke, peek and
+⍝ load at axes 4, 10 and 11 of the kernel; the state is axis 3.  The
+⍝ runtime pulls an arm by axis and applies it to the whole kernel, as
+⍝ Nock 9 does, so an arm reaches its own battery and state without
+⍝ naming itself.  Nothing is reified; the runtime selects and applies.
 nat ≡ Zero | Suc nat
 event ≡ Tick | Poke nat
 effect ≡ Log nat
@@ -10,9 +11,14 @@ effects ≡ Nil | Cons effect effects
 
 add m n = n ▹ { Zero m; Suc k (Suc (add m k)) }
 
-⍝ poke: (state, event) -> [state' effects].  A core cannot name itself
-⍝ in its own equations, so the new kernel is the new state and the
-⍝ runtime re-applies poke to it.
-kernel st ≔ {
-  poke ev = ev ▹ { Tick [(Suc st) Nil]; Poke n [(add st n) (Cons (Log st) Nil)] }
-}
+⍝ poke: kernel -> event -> [effects kernel'].  The new kernel keeps
+⍝ this battery and replaces the state.
+poke k ev = ev ▹ { Tick [Nil [(2⊑k) (Suc (3⊑k))]]; Poke n [(Cons (Log (3⊑k)) Nil) [(2⊑k) (add (3⊑k) n)]] }
+
+⍝ peek: kernel -> path -> answer.  Every path reads the counter.
+peek k p = 3⊑k
+
+⍝ load: kernel -> old state -> kernel'.  This battery over the old state.
+load k old = [(2⊑k) old]
+
+kernel ≔ [[poke [peek load]] Zero]

@@ -75,28 +75,59 @@ def test_digits_fold_to_a_numeral(lx):
 
 # ------------------------------------------- an event type and a kernel
 
+def axis(n, t, hd, tl):
+    """Nock's numbering over Scott cells, as `n@t` compiles it: the bits of
+    n after the leading 1, most significant first, 0 for head, 1 for tail."""
+    for bit in bin(n)[3:]:
+        t = App(tl if bit == "1" else hd, t)
+    return t
+
+
 @pytest.mark.parametrize("lx", LEXICONS)
 def test_a_runtime_can_poke_the_kernel_with_events_it_builds(lx):
-    """RUNTIME-DESIGN.md section 3b's loop, from the runtime's side: build
-    each event datum from the program's own constructors, apply poke to
-    the state and the event, install the new state, read the effects."""
+    """RUNTIME-DESIGN.md section 3b's loop over an Arvo-shaped kernel
+    (SPEC.md section 4.1): pull an arm by axis, apply it to the whole
+    kernel and the event, install the kernel it returns, read the effects.
+    The runtime never names an arm; it selects by axis, as Nock 9 does."""
     e = build("kernel-events", lx)
-    assert (e.sizes["kernel.poke"], e.sizes["Tick"], e.sizes["Poke"], e.sizes["Log"]) == (146, 1, 8, 5)
+    assert (e.sizes["poke"], e.sizes["peek"], e.sizes["load"], e.sizes["kernel"]) == (217, 8, 23, 300)
+    assert (e.sizes["Tick"], e.sizes["Poke"], e.sizes["Log"]) == (1, 8, 5)
     pr = Prober(e)
     src = (corpus.DIR / f"kernel-events.{lx}.ski").read_text()
     decl = {d.name: d for d in parse(src, lx).decls if hasattr(d, "ctors")}
-    hd, tl, poke = e.terms["hd"], e.terms["tl"], e.terms["kernel.poke"]
+    hd, tl = e.terms["hd"], e.terms["tl"]
+    POKE, PEEK, LOAD, STATE = 4, 10, 11, 3
 
-    def inject(state, event):
-        out = run_level0(App(App(poke, pr.nat(state)), event), 200_000)
-        new_state = pr.read_nat(App(hd, out.term))
-        ctor, fields = peel(App(tl, out.term), decl["effects"])
+    def pull(arm, k, arg):
+        return App(App(axis(arm, k, hd, tl), k), arg)
+
+    def inject(k, event):
+        out = run_level0(pull(POKE, k, event), 200_000)
+        k2 = App(tl, out.term)
+        ctor, fields = peel(App(hd, out.term), decl["effects"])
         effect = None
         if fields:
             name, payload = peel(fields[0], decl["effect"])
             effect = (name, pr.read_nat(payload[0]))
-        return out.steps, new_state, ctor, effect
+        return out.steps, k2, pr.read_nat(axis(STATE, k2, hd, tl)), ctor, effect
 
-    assert inject(0, e.terms["Tick"]) == (24, 1, "Nil", None)
-    assert inject(1, App(e.terms["Poke"], pr.nat(5))) == (35, 6, "Cons", ("Log", 1))
-    assert inject(6, e.terms["Tick"]) == (24, 7, "Nil", None)
+    k0 = e.terms["kernel"]
+    s1, k1, n1, c1, f1 = inject(k0, e.terms["Tick"])
+    s2, k2, n2, c2, f2 = inject(k1, App(e.terms["Poke"], pr.nat(5)))
+    s3, k3, n3, c3, f3 = inject(k2, e.terms["Tick"])
+    assert (n1, c1, f1) == (1, "Nil", None)
+    assert (n2, c2, f2) == (6, "Cons", ("Log", 1))
+    assert (n3, c3, f3) == (7, "Nil", None)
+    # The kernel is installed as reduced, not normalized: its state is the
+    # application the last poke built, so under the reference host, which
+    # shares no work, each poke re-reduces the history (a Tick costs 34
+    # more steps per earlier event).  A sharing runtime computes each
+    # state once (avon/DESIGN.md section 9).
+    assert (s1, s2, s3) == (61, 108, 135)
+
+    # peek reads the state through the same pull; load puts this battery
+    # over an old kernel's state, which is how a new battery takes over
+    assert pr.read_nat(pull(PEEK, k3, e.terms["Zero"])) == 7
+    k4 = pull(LOAD, k0, axis(STATE, k2, hd, tl))
+    assert pr.read_nat(axis(STATE, k4, hd, tl)) == 6
+    assert inject(k4, e.terms["Tick"])[2] == 7

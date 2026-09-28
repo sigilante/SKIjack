@@ -454,9 +454,11 @@ effects ≡ Nil | Cons effect effects
 
 add m n = n ▹ { Zero m; Suc k (Suc (add m k)) }
 
-kernel st ≔ {
-  poke ev = ev ▹ { Tick [(Suc st) Nil]; Poke n [(add st n) (Cons (Log st) Nil)] }
-}
+poke k ev = ev ▹ { Tick [Nil [(2⊑k) (Suc (3⊑k))]]; Poke n [(Cons (Log (3⊑k)) Nil) [(2⊑k) (add (3⊑k) n)]] }
+peek k p = 3⊑k
+load k old = [(2⊑k) old]
+
+kernel ≔ [[poke [peek load]] Zero]
 ```
 
 ASCII:
@@ -468,26 +470,36 @@ effects === Nil | Cons effect effects
 
 add m n = n |> { Zero m; Suc k (Suc (add m k)) }
 
-kernel st := {
-  poke ev = ev |> { Tick [(Suc st) Nil]; Poke n [(add st n) (Cons (Log st) Nil)] }
-}
+poke k ev = ev |> { Tick [Nil [(2@k) (Suc (3@k))]]; Poke n [(Cons (Log (3@k)) Nil) [(2@k) (add (3@k) n)]] }
+peek k p = 3@k
+load k old = [(2@k) old]
+
+kernel := [[poke [peek load]] Zero]
 ```
 
-`RUNTIME-DESIGN.md` section 3b names this shape: a kernel is a core the
-runtime pulls `poke` from, applies to an event, installs, and takes effects
-from -- Arvo at small scale. The loop, from the runtime's side, is in
-`tests/test_examples.py`: the runtime builds each event datum from the
-program's own compiled constructors (`Tick` is 1 atom, `Poke` 8, `Log` 5),
-applies `kernel.poke` (146 atoms) to the state and the event, reads the new
-state from the head of the returned cell and the effects from its tail.
-`Tick` from state 0 gives state 1 and no effects in 24 contractions;
-`Poke 5` from state 1 gives state 6 and `Cons (Log 1) Nil` in 35; `Tick`
-again gives 7. Nothing is reified anywhere: the runtime constructs data
-and applies, which is exactly what the boundary permits.
+The kernel is a door in Arvo's shape (SPEC.md §4.1): a cell
+`[battery state]` whose battery holds `poke`, `peek` and `load` at axes 4,
+10 and 11. The runtime knows those axes and no names. It pulls an arm by
+axis and applies it to the whole kernel, as Nock 9 does: `(4@k) k ev`. An
+arm reaches its battery as `2@k` and its state as `3@k`, so `poke` returns
+a whole new kernel, `[effects [(2@k) state']]`, without naming itself.
 
-One gap between the note and the language: the note says `poke` returns a
-*new kernel*, Arvo's closure-carries-its-state form. A core cannot name
-itself in its own equations (`kernel (Suc st)` inside `kernel` is an
-unresolved name; only an interpreter core's name denotes anything, its
-fuel loop), so `poke` returns the new state and the runtime re-applies
-`poke` to it. The observable behaviour is the same; the note now says so.
+The loop, from the runtime's side, is in `tests/test_examples.py`. The
+runtime builds each event from the program's own constructors (`Tick` is
+1 atom, `Poke` 8, `Log` 5), pulls `poke` (217 atoms) from the kernel
+(300), installs the kernel from the tail of the result, and reads the
+effects from its head. `Tick` from state 0 gives state 1 and no effects;
+`Poke 5` gives state 6 and `Cons (Log 1) Nil`; `Tick` again gives 7.
+`peek` reads 7 through the same pull. `load`, pulled from the first kernel
+with an earlier kernel's state, puts the battery over that state, which is
+the upgrade path.
+
+The contraction counts are 61, 108 and 135, and they grow. The runtime
+installs the kernel as the last poke left it, so the state is an
+unreduced application of the one before, and the reference host, which
+shares no work, reduces the whole history again on every poke: a `Tick`
+costs 34 more contractions per earlier event. The same loop under update
+in place (`avon/bench/strategies.py`'s `whnf_share`) costs 61, 66, 63 and
+then 63 per `Tick` for as long as it runs. A kernel loop belongs in a
+sharing runtime; the reference host's counts for it are conformance data,
+not a cost model.
