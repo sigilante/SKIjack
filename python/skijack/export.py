@@ -19,6 +19,11 @@ decodes to.  The targets are
 
 Nothing here changes how anything else in the package behaves.
 
+It also writes the corpus's dictionary (``skijack.dictionary``), the table
+Avon's jets key on (``avon/DESIGN.md`` §5, §6): ``dictionary.tsv``, one
+line per distinct term, ``hash  atoms  printed-term``, and
+``dictionary_names.tsv``, one line per name, ``program  name  hash``.
+
 The manifest's columns, tab-separated:
 
     id  file  max_steps  status  copy_steps  result_ctors  object_ctors
@@ -44,9 +49,10 @@ from . import corpus
 from .expand import expand_program
 from .parser import parse
 from .render import render_ascii
+from .dictionary import from_expansion
 from .run import decode, peel, run_level1, run_policy
 
-__all__ = ["jam", "targets", "export"]
+__all__ = ["jam", "targets", "dictionary", "export"]
 
 CAP = 5_000_000
 T3_CAP = 400_000
@@ -135,6 +141,24 @@ def targets() -> List[Tuple]:
     return rows
 
 
+def dictionary():
+    """(distinct rows: hash -> (atoms, printed term), names: [(program,
+    name, hash)]) over every compilable corpus program."""
+    rows, names = {}, []
+    stems = sorted({p.name.split(".")[0] for p in corpus.DIR.glob("*.ascii.ski")})
+    for stem in stems:
+        try:
+            exp = expand_program(parse(corpus.read(stem, "ascii"), "ascii"))
+        except Exception:                       # Stage A refusals
+            continue
+        d = from_expansion(exp)
+        for name in d.names():
+            e = d[name]
+            rows.setdefault(e.hash, (e.size, pretty(e.term)))
+            names.append((stem, name, e.hash))
+    return rows, names
+
+
 def export(outdir: pathlib.Path) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     lines = []
@@ -145,6 +169,11 @@ def export(outdir: pathlib.Path) -> int:
         lines.append("\t".join([ident, fname, str(max_steps), status,
                                 str(steps), rctors, octors, ctor, payload]))
     (outdir / "manifest.tsv").write_text("\n".join(lines) + "\n")
+    rows, names = dictionary()
+    (outdir / "dictionary.tsv").write_text("".join(
+        f"{h}\t{size}\t{text}\n" for h, (size, text) in sorted(rows.items())))
+    (outdir / "dictionary_names.tsv").write_text("".join(
+        f"{stem}\t{name}\t{h}\n" for stem, name, h in names))
     return len(lines)
 
 

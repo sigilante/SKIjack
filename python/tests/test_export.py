@@ -7,7 +7,8 @@ tables, the tower, EXAMPLES.md section 4's fuel boundary.
 import pytest
 from aviary_kernel.terms import App, Atom
 
-from skijack.export import jam, targets
+from skijack.dictionary import structural_hash
+from skijack.export import dictionary, jam, targets
 
 S, K, I = Atom("S"), Atom("K"), Atom("I")
 
@@ -83,3 +84,19 @@ def test_the_tower_and_the_fuel_boundary(rows):
 def test_every_declaration_is_a_target(rows):
     assert len(rows) == 45
     assert outcome(rows, "parse-chars.apply")[:3] == ("WHNF", 62_199, "RValN")
+
+
+def test_the_dictionary_export():
+    """dictionary.tsv is the table Avon's jets key on: distinct terms by
+    hash, the fixpoint among them, every name resolving to a row.  Avon's
+    tests/test_jets.c recomputes every hash from its printed term."""
+    rows, names = dictionary()
+    assert len(rows) == 282
+    assert len(names) == 868
+    from aviary_kernel.abstraction import expand
+    from aviary_kernel.environment import Environment
+    y = structural_hash(expand(Atom("Y"), Environment()))
+    assert y in rows                                # the fixpoint is tabled
+    assert all(h in rows for _stem, _name, h in names)
+    whnff = [h for stem, name, h in names if (stem, name) == ("interp-whnff", "whnfF")]
+    assert len(whnff) == 1 and rows[whnff[0]][0] == 618   # the paper's 618 atoms
