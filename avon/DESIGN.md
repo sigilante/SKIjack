@@ -868,3 +868,85 @@ allowed. It is the last tier and has the largest payoff.
   per-jet proof, and they already cover the Scott constructors, which
   compile to `absN` like any lifted chain (`ctorO`). Numeral arithmetic is
   recursive, not one template, and waits for 18.2's word cells.
+
+## 19. Lessons from Nockchain's persistent memory arena
+
+*Added 2026-09-27, from `nockchain-official` master at `6ccb9e85`:
+`docs/pma/DESIGN.md`, `crates/nockvm/rust/nockvm/src/pma.rs` and the
+`docs/pma/` incident notes. What is read in that code is marked as such;
+the rest is inference.*
+
+**What it is (read).** The PMA is a file mapped `MAP_SHARED`, which the
+runtime reaches by offset from a base, with a 64-byte trailer at the end
+holding the allocation offset. Allocation only bumps. After each event
+the new state is copied forward into the arena; nodes already there are
+terminals the copier never descends into, and old pages are never
+rewritten. Reclamation is a periodic Cheney copy into a second slab. They
+built a b-tree heap with mark-and-sweep and dropped it, at about 35 s
+against about 5 s. There is no hash-consing; the mug is cached in the
+metadata word. A snapshot is a copy of the slab, hashed over its used
+prefix.
+
+**It confirms §2.** Bump allocation, indices rather than pointers, a
+stop-and-copy collector and snapshots of the used prefix are where
+Nockchain arrived after trying the alternatives. Four details to adopt:
+
+- keep arena metadata outside index space, as their trailer does;
+- hash only the used prefix of an image;
+- write the root and a checksum last, in a sidecar, after the data is
+  synced, and reject an image whose root lies at or beyond its allocation
+  offset;
+- verify an image before trusting it. Their design calls raw slabs from
+  third parties unsafe to load (read), and Avon's loader should refuse
+  one that fails its checksum.
+
+**Durability order, for §8 and §9 (read, then adopted).** Nockchain appends
+the event to its log first, then advances the heap, then writes the
+trailer, syncs, and writes the sidecar last. Recovery loads the latest
+verified image and replays the log from it. Avon's kernel loop should keep
+the same order, and the scry fact store should be an append-only log in
+that order. That log is also the committed private input §17.3 needs, in
+the order its facts were learned.
+
+**Jets, for §6 (inferred).** Nockchain's cold, warm and hot jet state and
+its ancestry checks exist because a Nock formula's meaning depends on its
+subject. §6.1's closed-term argument removes that need, so Avon should not
+import the machinery. Keep the dashboard derived, rebuilt at load time,
+and never persisted: Nockchain's persisted cold state held process-local
+pointers, and a PMA boot now rebuilds it empty (read, `form.rs`). Avoid
+rebuilding the whole table on each registration, and avoid an equality
+test that mutates during lookup; both are in their code.
+
+**Witness mode, for §17 (inferred).** Nockchain's write-back is
+append-only, but four of its writes would break the circuit's write-once
+memory, and the witness strategy must forbid each:
+
+- forwarding pointers written into from-space, so no collection during a
+  witnessed run: size the arena first;
+- unifying equality, which rewrites slots, and so no indirection rewrites
+  (`AV_IND`) and no hash-consing;
+- caching a hash in node metadata: keep any hash cache in a side array;
+- a trailer rewritten on every allocation: in witness mode the bump
+  pointer is the counter, `ctr`, and it is recorded in the rows.
+
+Their prover takes nothing from the runtime heap (read): its memory table
+lists noun nodes by content, not by address, so nothing there resembles
+the allocation-ordered memory table `lean-ski`'s circuit uses. Avon's
+witness mode is the first runtime path that must produce one.
+
+**Pitfalls they hit (read), and what Avon takes from them.**
+
+- A boot loop advanced the persisted allocation offset without a new
+  event, and copying runtime caches into the arena grew one file from
+  1.6 GiB to over 8 GiB. Only a committed root may advance a persisted
+  offset.
+- Snapshot cleanup moved the valid snapshots aside, and a collection then
+  destroyed the only fallback. Never collect without a verified image to
+  fall back on.
+- "Alien noun" bugs: raw words were decoded against the wrong arena, and
+  the fix was branded handles. Avon's `uint32_t` indices carry the same
+  risk the day there are two arenas, such as a snapshot and a live heap.
+  Tag indices by arena in any API that sees both.
+- Checking tag and location on every dereference cost them 1.13× to 4×.
+  This favours Avon's single index space, with no location bits in a
+  node.
