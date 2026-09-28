@@ -681,10 +681,9 @@ a term. Avon exists to make that answer affordable, not to make it true.
   loop must not quietly widen that. Settle it before stage 7: a `peek`
   answered for a level-0 program is a private input the public statement
   does not name.
-- Atoms in the circuit. Probe decoding needs opaque atoms, and the circuit
-  has none yet (§17.3). Recommended: add an inert atom leaf to
-  `lean-ski`'s machine and AIR before stage 3, so decoding is provable
-  when it is built.
+- Atoms in the circuit. Decided and done in `lean-ski` (§17.3): the
+  machine has an inert `atom` cell and the AIR a halting kind for it. What
+  remains is carrying atoms through the Plonky3 tables and the checker.
 
 ## 16. Provenance of the numbers in this note
 
@@ -767,12 +766,15 @@ one a proof uses.
 
 ### 17.3 What a witness does not yet give
 
-- **An output.** The constraints fix the run, not the value it ends on.
-  Probe decoding (§1, §7) is the natural binding: `v X₁ … Xₙ` reaching `Xᵢ`
-  at the head names the constructor, and the stack holds its fields. It
-  needs atoms, and the circuit has none. An inert atom leaf in `lean-ski`'s
-  machine and AIR, with a halting kind for an atom at the head, should come
-  before stage 3, so decoding is provable when it is built (§15).
+- **An output, except by probing.** The constraints fix the run, not the
+  value it ends on. Probe decoding (§1, §7) binds it: `v X₁ … Xₙ` reaching
+  `Xᵢ` at the head names the constructor, and the stack holds its fields.
+  `lean-ski` now has the inert atom cell this needs, with a halting kind
+  for an atom at the head. A table started from a term applied to atom
+  markers, whose last row has the atom `i` at the head, proves that the
+  term reduces to `Xᵢ` applied to arguments (`Air.air_probe`, over open
+  head reduction: `Mach.omstep_some`). The Plonky3 tables and the Lean
+  checker do not carry atoms yet.
 - **Secrecy.** The first row loads the whole term in the clear, and the
   Plonky3 commitment is not hiding. Hiding the witness `w` of a statement
   `V x w` needs the loaded heap committed rather than public, and a hiding
@@ -814,15 +816,19 @@ cell, looks each cell up in the template and writes it to memory. The
 `INST` row joins the two by a bus message `(g, ctr, arguments)`. Arities
 above the row's width chain across rows.
 
-**Soundness, to prove in Lean.** After an `INST` row, the state decodes to a
-weak reduct of the state before; this follows from `absN_beta_close` and
-`WSteps.appT`, lifted through `decode`. A jetted run is then a weak
-reduction to a weak head normal form, and standardization carries it to
-normal order: `eval_of_wsteps` gives a normal-order value that weakly
-reduces to the proved one. Weak reduction from a WHNF keeps its head and
-its arity (also to prove), so with atoms (§17.3) a probe reads the same
-constructor either way. The contraction count changes; the value does not.
-Budgets count rows, `INST` rows included.
+**Soundness, proved in `lean-ski`** (`Ski/Inst.lean`). The instantiation
+step pops the arguments' pointers and writes the body with them
+(`Mach.instStep`). When the head reads back as `absN xs body` and the
+body's variables are among `xs`, the state after reads back as a weak
+reduct of the state before (`Mach.inst_sound`, from `absN_beta_close` and
+`WSteps.appT`, lifted through `decode`). A run mixing machine transitions
+with such steps, halting on a weak head normal form, proves normal-order
+evaluation up to weak reduction of the value (`Mach.jet_run_eval`, by
+`eval_of_wsteps`). Still to prove: that weak reduction from a WHNF keeps
+its head and arity, so that a probe (§17.3) reads the same constructor
+from a jetted run. The contraction count changes; the value does not.
+Budgets count rows, `INST` rows included. The circuit's `INST` rows and
+template table are still to build.
 
 **Identity is static.** The verifier checks every `J g` in the public
 program: its fallback term must equal `absN (caps ++ ps) body` for the
