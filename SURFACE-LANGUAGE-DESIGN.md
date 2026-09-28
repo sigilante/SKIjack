@@ -20,6 +20,12 @@ Language name bikeshedding:
 * Skinnydip
 * SKIrocket
 * Skirret
+* SKIblue
+* SKIdive
+* SKIlark
+* SKIlight
+* SKIline
+* SKIpilot
 
 ## 0. Thesis
 

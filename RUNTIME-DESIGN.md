@@ -308,6 +308,25 @@ extended set (B, C, S', B', C') at the runtime rather than a jet per
 chain. Only 7 of the top 40 structures are named; jets should key on the
 named ones and let the sub-spines fall out.
 
+**The dynamic census agrees on the chains and reverses the named
+ranking.** `avon census` (`avon/DESIGN.md` §6.7) counts the terms a run
+calls and weighs each by the contractions a residual jet on it would
+absorb. Over this corpus's 45 runs (1,730,432 contractions) and
+SKIlark's 41 (928,398), 2026-09-28:
+
+- The weakening chains lead on time as they lead on occurrences:
+  `S (K (S (K K)))` = `B (B K)` would absorb 8.1% alone, and `B (B S)`,
+  `S B` and `T` 5.2--5.6% each.
+- Scott constructors are the named leaders: `Cons` 7.1%, `pair` 6.1%,
+  `App` 4.2%, `Suc` 3.0%. One jet parametrized by field count, index and
+  constructor count covers them all.
+- `step` is large (2,428 atoms, 189 contractions a call) but called 589
+  times, 4.2%. By size it led the static table; by time, constructors
+  outrank it.
+
+The census supports Turner's extended set at the runtime and a
+parametric constructor jet over a jet per named supercombinator.
+
 * Avon:  jet $S(S(S(SS)S(S(SSS)S)))S$ -- **as written this diverges**:
   `S (S S) S (S (S S S) S)` is a saturated `S`, and the term grows 12 →
   37 → 398 → 7,492 atoms in 5, 20 and 60 steps with no normal form, so
