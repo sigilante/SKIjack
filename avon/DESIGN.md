@@ -1,6 +1,6 @@
 # Avon: the native runtime, planned
 
-> **Status (2026-09-21).** Design note written 2026-09-16. The compiler it targets is now implemented as `python/skijack`; the runtime it plans is not built, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative.
+> **Status (2026-09-27).** Design note written 2026-09-16. The compiler it targets is now implemented as `python/skijack`; the runtime it plans is not built, and `avon/bench/` reproduces the measurements it rests on. Where this note and the compiler differ, the compiler and its tests are authoritative. §17 and §18 (added 2026-09-27) fit Avon to the proof system in `lean-ski`: a third strategy whose runs the circuit proves, and the licence a jet needs inside a proof.
 
 *2026-09-16. The build plan for the C runtime named in `RUNTIME-DESIGN.md`
 §3a. Its constraints come from three places: the reference host
@@ -27,7 +27,8 @@ Avon's whole job list:
 4. recognize known terms and run native code for them (jets), including the
    interpreter;
 5. serve a scry namespace and the blocking resume loop;
-6. boot a kernel: apply a term to an initial subject, then `poke`/`peek`.
+6. boot a kernel: apply a term to an initial subject, then `poke`/`peek`;
+7. emit the witness a zero-knowledge proof of a run needs (§17).
 
 Items 1 to 3 are a runtime. Items 4 to 6 are what makes it *this* runtime.
 Self-hosting does not change the list: when the expander is written in the
@@ -107,6 +108,10 @@ Avon ships **two strategies in one binary**, selected per run:
 - `--strategy=share` (the default for work): update in place. Same values,
   fewer contractions, and its counts are reported as *its own*, in a
   published table beside the reference counts, never in place of them.
+
+A third strategy, `--strategy=witness`, exists for proofs: the circuit's
+machine executed literally, with the `copy` counts and a trace the prover
+consumes. §17 gives it; neither strategy above can stand in for it.
 
 What is conformance, precisely:
 
@@ -223,6 +228,10 @@ visible in its output: *host fuel* is a property of the run, *object fuel*
 is the numeral inside a level-1 term and is consumed by the term itself, so
 only the first is Avon's.
 
+A proved run has two further budgets, rows and memory cells, which count
+different things from host fuel and are fixed by the caller in public
+(§17.2).
+
 ### 3.3 The size cap
 
 The reference computes a DAG node count of the whole term every 512
@@ -271,7 +280,10 @@ this plan closes as decisions to take rather than leaving implicit:
 
 The bitstring does not preserve sharing. For snapshots of reduced states
 Avon writes its own image — the arena and the root — which is a `write(2)`
-of a flat array, and uses the bitstring only for interchange.
+of a flat array, and uses the bitstring only for interchange. A snapshot is
+not a proof witness: it carries indirections, jet nodes and the
+collector's moves, and the circuit's memory table has none of them
+(§17.1).
 
 ### 4.3 Atom hygiene, and a trap worth naming
 
@@ -298,6 +310,14 @@ vendored public-domain `sha256.c` (~200 lines, no dependency).
 It is computed **at load time only** — once per dictionary entry and once
 per candidate node in the loaded program — and never on the reduction hot
 path. §6 is why that suffices.
+
+The hash is for **dispatch, not commitment**. Sixty-four bits admit a
+collision after about 2³² work, which is harmless when a wrong match only
+wastes a jet check and fatal when a verifier trusts it. Nothing a proof
+relies on is keyed by it: a proof binds terms by the circuit's own field
+fingerprints (`lean-ski`'s `zk/`, with a proved collision bound), and a jet
+inside a proof is licensed by recomputing the term it stands for (§18.1),
+not by its hash.
 
 ## 6. Jets
 
@@ -427,6 +447,9 @@ artifact already does in Python:
 
 A jet that cannot be validated this way is not registered.
 
+Testing is the admission rule for `share` mode only. Inside a proof the
+verifier cannot re-run the term, so a jet there needs a theorem (§18).
+
 ## 7. The interpreter jet
 
 `whnfF`, and then `wfQ` and `wfN`. Native code that:
@@ -472,6 +495,14 @@ round starting from scratch consumes fuel again.
 The elided-fuel policy `@[]` is §3c: iterative deepening, doubling from 8 to
 a cap of 4096, the cap reported as the timeout outcome. Composed with the
 resume loop exactly as `run_with_namespace` composes them.
+
+Two rules for proved runs (§17). The policy may size a budget, off the
+record, but may not choose the budget a proof uses: doubling until the run
+succeeds publishes its length within a factor of two, which is what a
+budget-exact trace exists to hide. And the rounds of the resume loop run
+off-circuit; only the final run is proved, with the final fact store as
+its committed private input, so the fact store must be exportable, in the
+order its facts were learned, as that input.
 
 ## 9. Boot
 
@@ -540,7 +571,7 @@ tests.
 | 0 | skeleton | `Makefile` (C11, clang, `-Wall -Wextra -Werror`, ASan/UBSan debug target), `include/avon.h`, unit-test runner | `make check` runs and passes nothing | 150 |
 | 1 | heap and reducer | arena, nodes, GC, both strategies, fuel, size cap, statuses, and a reader for the printed form (terms have to get in somehow) | T0/T1/T2 in `copy` mode give 340 / 91,556 / 504,930; `share` mode gives the same values; the random-term differential against `aviary` is clean over millions of terms under ASan/UBSan; throughput ≥ 10⁷ contractions/s in `share` | 900 |
 | 2 | the wire format | printer with a node budget, container + bitstring `jam`/`cue`, atom table, hygiene check, arena snapshots | round-trips 10.2 items 4 and 5 on the whole corpus; the bitstring fuzzer never crashes and always rejects cleanly | 500 |
-| 3 | probing and the harness | markers, `peel`, `decode`, Scott-numeral reader, manifest runner; `export.py` on the Python side | every corpus target's decoded value matches; the paper's T3 and scry tables reproduce | 600 |
+| 3 | probing and the harness | markers, `peel`, `decode`, Scott-numeral reader, manifest runner; `export.py` on the Python side; the `witness` strategy (§17) | every corpus target's decoded value matches; the paper's T3 and scry tables reproduce; every corpus witness passes `lake exe aircheck` and proves and verifies with `lean-ski`'s `bench/plonky3`, at the `copy` contraction counts | 750 |
 | 4 | hash and jets | `sha256`, Merkle hash, dashboard, `AV_JET`, loader matching, `--jet-check`, the Scott and numeral jets | hashes match Python's strings; corpus identical jets on and off | 700 |
 | 5 | the interpreter jet | `whnfF`, then `wfQ`, `wfN`; boundary decode/encode; exact fuel semantics | `EXAMPLES.md` §4 boundaries flip at the same numeral; T2's cost falls to roughly T0's; values unchanged | 700 |
 | 6 | scry | fact store, resolver construction, resume loop, `@[]` policy | `scry-*` corpus entries reproduce their traces, round for round, including `STUCK` | 500 |
@@ -577,6 +608,13 @@ Three more this plan adds:
 - **never silently accept an atom that the Python oracle would contract**
   (§4.3).
 
+And three that proofs add (§17, §18):
+
+- **never emit a witness from `share` mode**, or from a run with a jet whose
+  tier theorem is not proved;
+- **never choose a published budget from the run it bounds**;
+- **never let a structural hash stand where a proof needs a commitment.**
+
 ## 13. Corrections this plan makes to `RUNTIME-DESIGN.md`
 
 Stated plainly so the note can be amended rather than quietly contradicted:
@@ -599,14 +637,18 @@ Stated plainly so the note can be amended rather than quietly contradicted:
    transcription of the sharing strategy runs the same job in 0.15 s — so
    about 55× of the expected speedup is strategy and representation, before
    any of it is C, and the language buys the order of magnitude after
-   that.
+   that. The funding drafts in `ski-in-ski/funding/` quote the Python
+   reference at about 10⁴/s; reconcile the two before either goes out.
 
 ## 14. Ancestry
 
 What this runtime is a re-implementation of, so that the claim is never
 implied by silence. Titles and years are believed right; **page ranges
 and exact titles are from memory and must be checked before any of this
-is cited** (the same caveat `RUNTIME-DESIGN.md` §6 carries).
+is cited** (the same caveat `RUNTIME-DESIGN.md` §6 carries). Turner's SP&E
+paper (9:31–49, 1979) and Jay and Given-Wilson (JSL 76(3):807–826, 2011,
+Theorem 3.2) are now checked, in `lean-ski`'s `paper/refs.bib`;
+Proposition 3.1 is proved there as `no_quote`.
 
 | what | where it comes from |
 |---|---|
@@ -636,7 +678,13 @@ a term. Avon exists to make that answer affordable, not to make it true.
   and a mismatch refuses to load.
 - Whether Avon ever serves `peek` to a *level-0* program. The language says
   scry works only under virtualization (`DESIDERATA.md` item 6); the boot
-  loop must not quietly widen that.
+  loop must not quietly widen that. Settle it before stage 7: a `peek`
+  answered for a level-0 program is a private input the public statement
+  does not name.
+- Atoms in the circuit. Probe decoding needs opaque atoms, and the circuit
+  has none yet (§17.3). Recommended: add an inert atom leaf to
+  `lean-ski`'s machine and AIR before stage 3, so decoding is provable
+  when it is built.
 
 ## 16. Provenance of the numbers in this note
 
@@ -657,3 +705,166 @@ Two details that bite: T2 is `--kk 500` — the harness's default object fuel
 of 120 is below what the inner term needs, and produces a different, smaller
 run — and node counts include the leaves built at load, so they are node
 counts and not atom counts.
+
+## 17. Proofs: the witness strategy
+
+*Added 2026-09-27.* The proof system is in `lean-ski`. Its circuit
+(`Ski/Air.lean`, built in Plonky3 in `bench/plonky3`) proves runs of one
+machine, the write-once heap machine of `Ski/Heap.lean`:
+
+- a row is the machine's registers: head pointer, stack pointer and
+  allocation counter;
+- the heap is one committed memory table of cells `S | K | I | A f x | N |
+  C x r`, addressed in allocation order, each written once at the counter,
+  with the argument stack in the heap as `C` cells;
+- the rule table is `Air.stepG`: an unwind pushes one stack cell, `I` and
+  `K` pop their arguments, `S` writes three cells.
+
+Lean decides the constraints on a concrete table (`Air.checkA_iff`, run as
+`lake exe aircheck`) and proves that an accepted table ends on the value
+the reference reducer reaches (`Air.air_sound`).
+
+Neither strategy of §1.1 produces that trace. `copy` has the circuit's
+contraction counts, but holds arguments in a C vector and writes no stack
+cells. `share` updates in place, and the circuit proves no update in place.
+So Avon adds a third:
+
+- `--strategy=witness`: `Air.stepG` executed literally over an append-only
+  arena in the circuit's cell encoding. No collection, no hash-consing, and
+  jets only as §18 allows. It emits the rows and the memory table, padded
+  to public budgets (§17.2). Its contraction counts equal `copy`'s, and its
+  values equal both. The Rust `step` and `traces` in `lean-ski`'s
+  `bench/plonky3/src/main.rs` are its reference.
+
+`share` stays the way to find an answer fast. The proof comes from a
+witness-mode replay, which must reach the same decoded value.
+
+### 17.1 What a witness is
+
+- The rows and the memory table, in the format `Ski/AirCheck.lean` reads,
+  or directly as the prover's traces.
+- Nothing from the arena. A §4.2 snapshot carries indirections, jet nodes
+  and the collector's moves; the memory table has none of them.
+- Weak head normal form only. The circuit proves reduction to WHNF, as
+  `run.py` runs it (`whnf_only`), so a `NORMAL` run has no witness.
+
+### 17.2 Budgets are public
+
+A proved run reports three quantities, apart:
+
+- **host fuel**, in contractions (§3.2);
+- **rows**, one per transition, contractions and unwinds together: about
+  2.44 per contraction on the corpus (`lean-ski`'s `lake exe aircost`);
+- **memory cells**: the loaded heap, plus one cell per unwind and three
+  per `S`.
+
+The circuit accepts a table of `k` rows exactly when `k` exceeds the run's
+transitions (`Air.air_budgets`), and the memory table pads to any larger
+size (`Air.Accepts.pad`). So the caller fixes both, as powers of two, before
+the run, and publishes them with the statement. §8's rule applies: the
+elided-fuel policy may size a budget off the record, but may not choose the
+one a proof uses.
+
+### 17.3 What a witness does not yet give
+
+- **An output.** The constraints fix the run, not the value it ends on.
+  Probe decoding (§1, §7) is the natural binding: `v X₁ … Xₙ` reaching `Xᵢ`
+  at the head names the constructor, and the stack holds its fields. It
+  needs atoms, and the circuit has none. An inert atom leaf in `lean-ski`'s
+  machine and AIR, with a halting kind for an atom at the head, should come
+  before stage 3, so decoding is provable when it is built (§15).
+- **Secrecy.** The first row loads the whole term in the clear, and the
+  Plonky3 commitment is not hiding. Hiding the witness `w` of a statement
+  `V x w` needs the loaded heap committed rather than public, and a hiding
+  commitment.
+- **Scry.** Only a resume loop's final run is proved, with the final fact
+  store as a committed private input (§8).
+
+## 18. Jets in a proof
+
+§6 licenses a jet by testing: probes, differential runs and the corpus.
+Inside a proof the verifier cannot re-run the term, so a jet there is a
+precompile, licensed by a theorem. There are three tiers, in the order to
+build them.
+
+### 18.1 Supercombinator jets: one theorem for all of them
+
+Every lifted λ-chain compiles to a closed combinator, `absN (caps ++ ps)
+body`, applied to its captured variables (`wrapLift`, in skijack's `comp`
+and `lean-ski`'s `Ski/Compile.lean`). Applied to all its arguments, it
+reduces to the body with the arguments substituted. `lean-ski` proves that
+once, for every body: `absN_beta_close` is weak β for all formals at once.
+The reduction it replaces costs up to `3^k · vsize body` weak contractions
+for `k` formals (`absN_beta_count`). A supercombinator jet replaces all of
+it with one instantiation of the body. That is the Reduceron's template
+instantiation, and its licence is one theorem, not one per jet.
+
+**In the circuit** a supercombinator jet is a row kind `INST(g)`:
+
+- the head cell is a jet cell `J g`, which the loader places;
+- the row reads `arity(g)` stack cells;
+- it writes the body's cells at `ctr, ctr + 1, …`, each argument variable
+  replaced by the pointer its stack cell holds;
+- it sets the head to the body's root and the stack to the rest.
+
+The body's cells are fixed per supercombinator, so they form a preprocessed
+**template table**, one row per body cell, which the verifier builds from
+the public program. A witness **instantiation table**, one row per written
+cell, looks each cell up in the template and writes it to memory. The
+`INST` row joins the two by a bus message `(g, ctr, arguments)`. Arities
+above the row's width chain across rows.
+
+**Soundness, to prove in Lean.** After an `INST` row, the state decodes to a
+weak reduct of the state before; this follows from `absN_beta_close` and
+`WSteps.appT`, lifted through `decode`. A jetted run is then a weak
+reduction to a weak head normal form, and standardization carries it to
+normal order: `eval_of_wsteps` gives a normal-order value that weakly
+reduces to the proved one. Weak reduction from a WHNF keeps its head and
+its arity (also to prove), so with atoms (§17.3) a probe reads the same
+constructor either way. The contraction count changes; the value does not.
+Budgets count rows, `INST` rows included.
+
+**Identity is static.** The verifier checks every `J g` in the public
+program: its fallback term must equal `absN (caps ++ ps) body` for the
+template it names, which the verifier recomputes from the template. No
+hash is trusted. The structural hash of §5 finds candidates at load time;
+the recomputation licenses them. A `J` node that `S` copies apart loses its
+wrapper and reduces as its fallback, which is still a proved run.
+
+**It cannot quote.** An instantiation moves argument pointers and never
+inspects what they point to. So the one rule the theorem does not give
+(§12: a jet never quotes for a running term) holds by construction.
+
+### 18.2 Data jets: native values at the boundary
+
+Arithmetic on Scott numerals is unary, so a jet for it pays only over
+native values. That needs a word cell `W n`: an inert leaf with a
+field-element payload, whose meaning is a term, `⟦W n⟧` being the numeral
+`n`. Each jet then gets a table that proves its function on words (`ADD`,
+with range checks, and so on), joined to the CPU by a bus.
+
+The licence is per jet: a Lean theorem that the jet's term, applied to
+`⟦a⟧ …`, weakly reduces to `⟦f(a …)⟧`. That is `lean-ski`'s word-level
+composition theorem for that word (`composition`, with the three-valued
+contract proved for the kit's eliminator and owed per table). It is the
+paper's jet contract, and the word type is the representation ABI at the
+VM boundary.
+
+### 18.3 The interpreter jet
+
+§7's jet collapses a tower level. As a precompile its licence is the
+tower's adequacy theorem: the self-interpreter, on an encoded term,
+computes the encoding of the term's value. It reads encoded data, which is
+allowed. It is the last tier and has the largest payoff.
+
+### 18.4 What changes elsewhere
+
+- §6.5: a jetted witness reports jet calls beside contractions, and has
+  fewer rows, not the same count.
+- §6.6: testing stays the admission rule for `share` mode. In `witness`
+  mode a jet is admitted only when its tier's theorem is proved: 18.1
+  once, 18.2 per jet, 18.3 once.
+- §11: stage 4 should build the supercombinator jets first. They need no
+  per-jet proof, and they already cover the Scott constructors, which
+  compile to `absN` like any lifted chain (`ctorO`). Numeral arithmetic is
+  recursive, not one template, and waits for 18.2's word cells.
