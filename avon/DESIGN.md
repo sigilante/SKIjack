@@ -769,16 +769,22 @@ one a proof uses.
 - **An output, except by probing.** The constraints fix the run, not the
   value it ends on. Probe decoding (§1, §7) binds it: `v X₁ … Xₙ` reaching
   `Xᵢ` at the head names the constructor, and the stack holds its fields.
-  `lean-ski` now has the inert atom cell this needs, with a halting kind
-  for an atom at the head. A table started from a term applied to atom
-  markers, whose last row has the atom `i` at the head, proves that the
-  term reduces to `Xᵢ` applied to arguments (`Air.air_probe`, over open
-  head reduction: `Mach.omstep_some`). The Plonky3 tables and the Lean
-  checker do not carry atoms yet.
-- **Secrecy.** The first row loads the whole term in the clear, and the
-  Plonky3 commitment is not hiding. Hiding the witness `w` of a statement
-  `V x w` needs the loaded heap committed rather than public, and a hiding
-  commitment.
+  `lean-ski` has the inert atom cell this needs, with a halting kind for an
+  atom at the head. A table started from a term applied to atom markers,
+  whose last row has the atom `i` at the head, proves that the term
+  reduces to `Xᵢ` applied to arguments (`Air.air_probe`). The Plonky3
+  tables carry atoms (tag 6), and an AIR may require its last row to read
+  a named accepting atom.
+- **Secrecy, except for statements.** The corpus proofs load the whole
+  term in the clear under a non-hiding commitment. A statement `V x w`
+  keeps `w` private: `lean-ski` proves a Sudoku solution in zero
+  knowledge (`Ski/Sudoku.lean`, `bench/plonky3/src/sudoku.rs`), with a
+  hiding PCS, the witness as a private table of Scott Booleans, fixed
+  heights, the last row checked for the accepting atom, and blinding for
+  the per-table lookup sums Plonky3 publishes, which otherwise let a
+  verifier check a guessed witness. The verifier checks the statement file
+  in Lean first. Other witness shapes need their own witness tables and
+  blinding. The zero-knowledge argument is informal.
 - **Scry.** Only a resume loop's final run is proved, with the final fact
   store as a committed private input (§8).
 
@@ -830,14 +836,20 @@ jetted run reads back the head and arity an unjetted one does
 (`jet_run_shape`). Carrying that to atom probes needs instantiation over
 open terms, which comes with the circuit's `INST` rows. The contraction count changes; the value does not.
 Budgets count rows, `INST` rows included. The circuit's `INST` rows and
-template table are still to build.
+template table are planned in `lean-ski`'s `bench/plonky3/DESIGN.md` §2,
+not yet built. That plan replaces the `J g` cell with a public roots table:
+the addresses in the loaded heap where the compiled `absN` sits. This
+matches `Mach.JStep.inst`'s hypothesis as it stands, with no new cell and
+no change to `decode`. It keeps the static identity check below, done in
+Lean over the loaded heap.
 
-**Identity is static.** The verifier checks every `J g` in the public
-program: its fallback term must equal `absN (caps ++ ps) body` for the
-template it names, which the verifier recomputes from the template. No
-hash is trusted. The structural hash of §5 finds candidates at load time;
-the recomputation licenses them. A `J` node that `S` copies apart loses its
-wrapper and reduces as its fallback, which is still a proved run.
+**Identity is static.** The verifier checks every jet root in the public
+program: `termAt` there must read `absN (caps ++ ps) body` for the
+template the roots table names, which Lean recomputes from the template.
+No hash is trusted. The structural hash of §5 finds candidates at load
+time; the recomputation licenses them. `S` copies pointers, not cells, so
+a copy of a root is the root and stays jettable. (The superseded `J g`
+design needed a wrapper cell that a copy could lose.)
 
 **It cannot quote.** An instantiation moves argument pointers and never
 inspects what they point to. So the one rule the theorem does not give
