@@ -824,9 +824,11 @@ reduct of the state before (`Mach.inst_sound`, from `absN_beta_close` and
 `WSteps.appT`, lifted through `decode`). A run mixing machine transitions
 with such steps, halting on a weak head normal form, proves normal-order
 evaluation up to weak reduction of the value (`Mach.jet_run_eval`, by
-`eval_of_wsteps`). Still to prove: that weak reduction from a WHNF keeps
-its head and arity, so that a probe (§17.3) reads the same constructor
-from a jetted run. The contraction count changes; the value does not.
+`eval_of_wsteps`). Weak reduction from a WHNF keeps its head and arity
+(`small_lemma_whnf`, and `small_lemma` for a variable-headed spine), so a
+jetted run reads back the head and arity an unjetted one does
+(`jet_run_shape`). Carrying that to atom probes needs instantiation over
+open terms, which comes with the circuit's `INST` rows. The contraction count changes; the value does not.
 Budgets count rows, `INST` rows included. The circuit's `INST` rows and
 template table are still to build.
 
