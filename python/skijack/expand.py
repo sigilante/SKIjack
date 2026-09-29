@@ -840,7 +840,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
             equation = lowered[key]
             taken = set(equation.binders) | free_names(equation.body)
             grp = _fresh("g", taken)
-            sub = {}
+            sub: Dict[str, A.Expr] = {}
             for i, okey in enumerate(group):
                 ocore, oname = okey
                 # a member is reached by its source name from this body when

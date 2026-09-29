@@ -224,7 +224,7 @@ class _Gen:
             return Ap(self.gen(e.fn, scope, sub), self.gen(e.arg, scope, sub))
         if isinstance(e, A.Lambda):
             params: List[str] = []
-            body = e
+            body: A.Expr = e
             while isinstance(body, A.Lambda):
                 params.append(body.param)
                 body = body.body
@@ -241,7 +241,7 @@ class _Gen:
             term = self.gen(body, captured + params,
                             {k: sub[k] for k in inner})
             self.rules[name] = Rule(tuple(captured + params), term)
-            out = Ref(name)
+            out: object = Ref(name)
             for c in captured:
                 out = Ap(out, Var(c))
             return out
@@ -271,6 +271,7 @@ def compile0(program: A.Program) -> Dict[str, Term]:
             eqs.append(d)
             order.append(d.name)
         else:
+            assert isinstance(d, A.Def)         # in_subset admits no other
             defs.append(d)
             order.append(d.name)
     for i, nm in enumerate(order):
@@ -330,21 +331,22 @@ def compile0(program: A.Program) -> Dict[str, Term]:
                 rules[q.name] = Rule((), Ap(Ref("\x00Y"), Ref(q.name + "\x00gen")))
             continue
         # a group: gen t = tuple (code_0 t) .. (code_n-1 t); member_i = sel_i (Y gen)
-        n = len(group)
+        size = len(group)
         key = "\x00group:" + group[0]
-        xs = [f"x{i}" for i in range(n)]
+        xs = [f"x{i}" for i in range(size)]
         rules[key + "tuple"] = Rule(tuple(xs) + ("c",), ap(Var("c"), *[Var(x) for x in xs]))
-        for j in range(n):
+        for j in range(size):
             rules[f"{key}pick{j}"] = Rule(tuple(xs), Var(xs[j]))
             rules[f"{key}sel{j}"] = Rule(("t",), Ap(Var("t"), Ref(f"{key}pick{j}")))
         tv = "\x00grp"
         for j, m in enumerate(group):
             binders = next(q2.binders for q2 in eqs if q2.name == m)
-            sub = {o: Ap(Ref(f"{key}sel{i}"), Var(tv)) for i, o in enumerate(group)}
+            sub: Dict[str, object] = {o: Ap(Ref(f"{key}sel{i}"), Var(tv))
+                                      for i, o in enumerate(group)}
             scope = [tv] + list(binders)
             rules[f"{key}code{j}"] = Rule(tuple(scope), g.gen(bodies[m], scope, sub))
         rules[key + "gen"] = Rule(("t",), ap(Ref(key + "tuple"),
-                                              *[Ap(Ref(f"{key}code{j}"), Var("t")) for j in range(n)]))
+                                              *[Ap(Ref(f"{key}code{j}"), Var("t")) for j in range(size)]))
         rules[key] = Rule((), Ap(Ref("\x00Y"), Ref(key + "gen")))
         for j, m in enumerate(group):
             rules[m] = Rule((), Ap(Ref(f"{key}sel{j}"), Ref(key)))

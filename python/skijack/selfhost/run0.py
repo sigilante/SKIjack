@@ -171,7 +171,7 @@ def _split(x):
 
 
 def _name(x) -> str:
-    out = []
+    out: List[str] = []
     while True:
         h, a = _split(x)
         if h == "nn":
@@ -213,7 +213,8 @@ def decode(status: str, body: str) -> Optional[List[Tuple[str, Term]]]:
         return None
     if h != "ok":
         raise ValueError(f"not a result: {h}")
-    out, x = [], a[0]
+    out: List[Tuple[str, Term]] = []
+    x = a[0]
     while True:
         h, a = _split(x)
         if h == "on":
