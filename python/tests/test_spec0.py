@@ -20,7 +20,14 @@ from skijack.dictionary import structural_hash
 from skijack.parser import parse
 from skijack.spec0 import Subset0Error, compile0, in_subset
 
-sys.setrecursionlimit(1_000_000)
+@pytest.fixture(autouse=True)
+def _deep_recursion():
+    """The expanders recurse on term depth; raised for these tests only,
+    and restored, since other tests depend on the default."""
+    old = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(old, 100_000))
+    yield
+    sys.setrecursionlimit(old)
 
 
 def agree(src, check=True):
