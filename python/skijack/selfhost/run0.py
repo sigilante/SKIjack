@@ -49,6 +49,7 @@ from skijack.errors import SkijackError
 from skijack.export import jam
 from skijack.parser import parse
 from skijack.spec0 import Subset0Error, compile0, in_subset
+from skijack.templates import templates, write as write_templates
 
 HERE = pathlib.Path(__file__).resolve().parent
 FRONT = HERE / "front0.ascii.ski"
@@ -69,18 +70,26 @@ class Deep:
 
 
 @functools.lru_cache(maxsize=1)
-def compiled() -> Dict[str, Term]:
+def expansion():
     with Deep():
-        return skijack.compile(FRONT.read_text(), lexicon="ascii").terms
+        return skijack.compile(FRONT.read_text(), lexicon="ascii")
+
+
+def compiled() -> Dict[str, Term]:
+    return expansion().terms
 
 
 @functools.lru_cache(maxsize=1)
 def term_dir() -> pathlib.Path:
-    """A directory of the SKIT files avon front0 reads."""
+    """A directory of the SKIT files avon front0 reads, and the front end's
+    supercombinator templates (skijack.templates) for --templates."""
     d = pathlib.Path(tempfile.mkdtemp(prefix="front0-"))
     t = compiled()
     for name in TERMS:
         (d / f"{name}.skit").write_bytes(jam(t[name]))
+    with Deep():
+        write_templates(templates(expansion()), d / "templates.tsv",
+                        d / "template_terms.tsv")
     return d
 
 

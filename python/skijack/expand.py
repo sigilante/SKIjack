@@ -460,6 +460,12 @@ class Expansion:
     #: name -> the (key datum, answer datum) pairs of a namespace literal
     namespaces: Dict[str, Tuple[Tuple[Term, Term], ...]] = field(
         default_factory=dict)
+    #: backend rule name -> (kind, label), for every rule the expander
+    #: defined with formals: kind is prelude, ctor, eq, rec (a recursion's
+    #: body), code (a group member's body), group (a group's tuple, pick,
+    #: sel or gen) or lift; the label is the source name it serves.
+    #: Bookkeeping only: no term depends on it (skijack.templates).
+    rule_kinds: Dict[str, Tuple[str, str]] = field(default_factory=dict)
 
     def term(self, name: str) -> Term:
         return self.terms[name]
@@ -472,16 +478,18 @@ class Expansion:
 
 
 class _Codegen:
-    def __init__(self, env: Environment, resolve, helper_names=None):
+    def __init__(self, env: Environment, resolve, helper_names=None, kinds=None):
         self.env = env
         self.resolve = resolve          # source name -> backend Atom, or None
         self.helper_names: List[str] = ([] if helper_names is None
                                         else helper_names)
+        #: shared with Expansion.rule_kinds: each lift's kind and label
+        self.kinds: Dict[str, Tuple[str, str]] = {} if kinds is None else kinds
 
     def with_resolver(self, resolve) -> "_Codegen":
         """The same code generator under a different name environment --
         one per core, so a core's equations see their siblings first."""
-        return _Codegen(self.env, resolve, self.helper_names)
+        return _Codegen(self.env, resolve, self.helper_names, self.kinds)
 
     def gen(self, e: A.Expr, scope: Sequence[str], owner: str) -> Term:
         """Compile ``e``; ``scope`` is the enclosing binder list in order."""
@@ -515,6 +523,7 @@ class _Codegen:
         term = self.gen(body, inner_scope, owner)
         self.env.define_rule(name, tuple(inner_scope), term)
         self.helper_names.append(name)
+        self.kinds[name] = ("lift", owner)
         out: Term = a(name)
         for c in captured:
             out = KApp(out, v(c))
@@ -641,6 +650,8 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     # and §4): a fuel numeral is what a generated loop peels.
     env.define_rule("zero", (_z, _sc), v(_z))
     env.define_rule("suc", (_n, _z, _sc), K_(v(_sc), v(_n)))
+    kinds: Dict[str, Tuple[str, str]] = {
+        nm: ("prelude", nm) for nm in ("pair", "hd", "tl", "nil", "cons", "zero", "suc")}
 
     # --- backend names.  Program-level names (constructors, top-level
     # equations, definitions, the prelude) share one namespace; a core's equations
@@ -711,8 +722,9 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
             for f in fields:
                 body = KApp(body, v(f))
             env.define_rule(backend[c.name], tuple(fields + conts), body)
+            kinds[backend[c.name]] = ("ctor", c.name)
 
-    cg = _Codegen(env, resolve)
+    cg = _Codegen(env, resolve, kinds=kinds)
 
     # --- passes 1..3 on every equation body, then codegen
     lowered: Dict[Tuple[Optional[str], str], A.Equation] = {}
@@ -808,11 +820,13 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 used.add(gen_name)
                 term = gen.gen(body, scope, bname)
                 env.define_rule(gen_name, tuple(scope), term)
+                kinds[gen_name] = ("rec", bname)
                 env.define_alias(bname, K_(a("Y"), a(gen_name)))
             else:
                 scope = list(equation.binders)
                 term = gen.gen(equation.body, scope, bname)
                 env.define_rule(bname, tuple(scope), term)
+                kinds[bname] = ("eq", bname)
             continue
         n = len(group)
         gname = _mangle(_bname(group[0]) + "Group", used)
@@ -823,14 +837,17 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
         tup = _mangle(gname + "Tuple", used)
         used.add(tup)
         env.define_rule(tup, tuple(xs) + ("\x00c",), K_(v("\x00c"), *[v(x) for x in xs]))
+        kinds[tup] = ("group", gname)
         sels = []
         for j in range(n):
             pick = _mangle(f"{gname}Pick{j}", used)
             used.add(pick)
             env.define_rule(pick, tuple(xs), v(xs[j]))
+            kinds[pick] = ("group", gname)
             sel = _mangle(f"{gname}Sel{j}", used)
             used.add(sel)
             env.define_rule(sel, ("\x00t",), K_(v("\x00t"), a(pick)))
+            kinds[sel] = ("group", gname)
             sels.append(sel)
         # each member's code takes the group first; its calls to members
         # (itself too) project from it
@@ -858,11 +875,13 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 return resolver(_core)(nm)
             term = cg.with_resolver(resolve_in).gen(body, scope, _bname(key))
             env.define_rule(code, tuple(scope), term)
+            kinds[code] = ("code", _bname(key))
             codes.append(code)
         gen_name = _mangle(gname + "Gen", used)
         used.add(gen_name)
         env.define_rule(gen_name, ("\x00t",),
                         K_(a(tup), *[KApp(a(c), v("\x00t")) for c in codes]))
+        kinds[gen_name] = ("group", gname)
         env.define_alias(gname, K_(a("Y"), a(gen_name)))
         for j, key in enumerate(group):
             env.define_alias(_bname(key), K_(a(sels[j]), a(gname)))
@@ -876,7 +895,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
 
     # --- pass 5: bracket abstraction
     out = Expansion(env=env, backend=dict(backend), types=dict(types),
-                    ctors=dict(ctors))
+                    ctors=dict(ctors), rule_kinds=kinds)
     quoted_names = {d.name for d in qdefs}
     names = [n for n in dict.fromkeys(list(source_names) + list(PRELUDE_NAMES))
              if n not in quoted_names]

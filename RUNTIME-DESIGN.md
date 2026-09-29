@@ -332,3 +332,30 @@ parametric constructor jet over a jet per named supercombinator.
   37 → 398 → 7,492 atoms in 5, 20 and 60 steps with no normal form, so
   there is nothing for a jet to compute. Kept pending clarification of
   what it was meant to denote.
+
+## 9. Templates: the compiler's supercombinators, beside the terms
+
+**The expander hands the runtime the functions that bracket abstraction
+erases, and changes no term doing it.** Every rule with formals -- each
+equation, recursion body, group part, lifted lambda, constructor and
+prelude rule -- is also written as a template: its formals and its open
+body, keyed by the §5 hash of the SKI term it compiles to
+(`skijack/templates.py`; `export.py` writes `templates.tsv` and
+`template_terms.tsv` beside the dictionary).
+
+- **The SKI stays the program.** The terms, their hashes and every other
+  export file are byte for byte what they were; a runtime without
+  templates, or one that ignores them, runs the SKI as before.
+- **A template proves itself.** Abstracting its body over its formals,
+  the last first, gives its key; the runtime checks that before using
+  one (`avon/docs/DESIGN.md` §6.9), and so does `templates.check`. An atom
+  of a body is a reference exactly when aviary's expansion expands it.
+- **It is lean-ski's template.** `(formals, open body)` is what
+  `Ski/JetTable.lean`'s `jetTable` licenses as a supercombinator proof jet
+  (`avon/docs/DESIGN.md` §18.1), with the same exclusions: no rule without
+  formals, no open body, no η-template (`λ xs. G xs`, which instantiating
+  would repeat forever).
+
+On the 17 compilable corpus programs, 744 rules give 736 templates, the
+other 8 being η-templates, and every one abstracts back to its term; the
+SKIjack-0 front end gives 993, each one of spec0's rules.
