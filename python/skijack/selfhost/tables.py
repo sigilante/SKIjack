@@ -60,10 +60,20 @@ def classify(n: int) -> str:
     return "ChOther"
 
 
-#: the names the front end must recognize, and the prefix of its own
-NAMES = {"nameS": "S", "nameK": "K", "nameI": "I", "namePair": "pair",
-         "nameHd": "hd", "nameTl": "tl", "nameNil": "nil", "nameCons": "cons",
-         "nameZero": "zero", "nameSuc": "suc"}
+#: the names the front end must recognize, interned first and in this
+#: order: `@` is the name no identifier can be, for a recursion's own
+#: variable and the cycle mark; the empty name is a formal never looked up
+RESERVED = [("S", "S"), ("K", "K"), ("I", "I"), ("Pair", "pair"), ("Hd", "hd"),
+            ("Tl", "tl"), ("Nil", "nil"), ("Cons", "cons"), ("Zero", "zero"),
+            ("Suc", "suc"), ("At", "@"), ("None", "")]
+
+
+def bits(n: int) -> str:
+    """n as the front end's binary number, least significant bit first."""
+    out = "Bn"
+    for b in bin(n)[2:] if n else "":   # most significant first, nested deepest
+        out = f"({'Bo' if b == '1' else 'Bz'} {out})"
+    return out
 
 
 #: the token type's constructors, as front0.ascii.ski declares them
@@ -111,9 +121,15 @@ def classify_tree(prefix: int = 0, depth: int = 0) -> str:
 
 def generated() -> str:
     lines = [f"classify c = c |> {{ Code b6 b5 b4 b3 b2 b1 b0 {classify_tree()} }}"]
-    for k, v in NAMES.items():
-        lines.append(f"{k} := {name(v)}")
-    for k, ch in [("codeAt", "@"), ("codeGt", ">"), ("codeEqc", "="),
+    for k, v in RESERVED:
+        lines.append(f"name{k} := {name(v)}")
+    for i, (k, _v) in enumerate(RESERVED):
+        lines.append(f"id{k} := Id {bits(i)}")
+    seed = "NmNil"
+    for k, _v in reversed(RESERVED):
+        seed = f"(NmCons (IdRaw name{k}) {seed})"
+    lines.append(f"seedNames := {seed}")
+    for k, ch in [("codeGt", ">"), ("codeEqc", "="),
                   ("codeMinus", "-"), ("codeNl", "\n")]:
         lines.append(f"{k} := {code(ord(ch))}")
     lines.extend(token_tables())

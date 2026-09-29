@@ -107,8 +107,9 @@ def tokens(t):
         if c == "TNil":
             return out
         k, tf = fields(f[0], "tok")
-        if k == "TName":
-            out.append(("IDENT", name(tf[0])))
+        if k == "TName":                    # the lexer's identifiers are raw
+            _raw, (n,) = fields(tf[0], "ident")
+            out.append(("IDENT", name(n)))
         elif k == "TAxis":
             out.append(("AXIS", nat(tf[0])))
         else:
