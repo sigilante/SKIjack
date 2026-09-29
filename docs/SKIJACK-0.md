@@ -166,8 +166,8 @@ many values, so it needs a reducer that shares; `run0` hands the term
 atoms, and reads the printed normal form back. It checks, against
 `skijack.spec0`:
 
-- the fixed point: `front` applied to its own source gives all 375 of its
-  names their terms, hash for hash (about 2.2 billion reductions);
+- the fixed point: `front` applied to its own source gives all 433 of its
+  names their terms, hash for hash (about 1.3 billion reductions);
 - the random programs of `tests/test_spec0.py`, which it must compile as
   spec0 does;
 - the programs at the subset's edges in `run0.EDGES`, which it must accept

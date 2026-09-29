@@ -45,15 +45,34 @@ hr    === HR nat bit
 rterm === RVar name | RIx nat | RRef name | RS | RK | RI | RAp rap | RRule rule | RBad
 rap   === RA rterm rterm
 rule  === Rule names rterm
-rules === RNil | RCons name rule rules
+rules === Rm0 | RmT rmt
+rmt   === RmB rules name rule rules
 subs  === SubNil | SubCons name rterm name subs
 mr    === MR rterm | MRNone
 mru   === MRu rule | MRuNone
 eqx   === EqX name names dexpr names
 eqxs  === ExNil | ExCons eqx eqxs
+-- trees keyed by name, in code order: a set, and maps to constructors,
+-- rules, terms, Tarjan's state and groups
+ord   === CLt | CEq | CGt
+nset  === Ns0 | NsT nst
+nst   === NsB nset name nset
+cm    === Cm0 | CmT cmt
+cmt   === CmB cm name ci cm
+tje   === TjE names bool nat nat bool
+tjm   === Tj0 | TjT tjt
+tjt   === TjB tjm name tje tjm
+mtj   === MTj tje | MTjNone
+scs   === ScNil | ScCons names scs
+tst   === Tst nat names tjm scs
+gi    === GSingle bool | GMulti eqxs | GSkip
+gm    === Gm0 | GmT gmt
+gmt   === GmB gm name gi gm
+mg    === MG gi | MGNone
 tm    === TS | TK | TI | TV nat | TA ap
 ap    === Ap tm tm
-memo  === MeNil | MeCons name tm memo
+memo  === Me0 | MeT met
+met   === MeB memo name tm memo
 mtm   === MTm tm | MTmNone
 tmm   === TM tm memo
 tms   === TmNil | TmCons tm tms
@@ -119,7 +138,14 @@ skipLine r = r |> { SNil (lx SNil) ; SCons c r2 (eqCode c codeNl |> { Yes (TCons
 memN n ns = ns |> { NmNil No ; NmCons m r (orB (eqName n m) (memN n r)) }
 appN a b = a |> { NmNil b ; NmCons m r (NmCons m (appN r b)) }
 lenN ns = ns |> { NmNil Zero ; NmCons m r (Suc (lenN r)) }
-dupN ns = ns |> { NmNil No ; NmCons n r (orB (memN n r) (dupN r)) }
+cmpBit a b = a |> { Lo (b |> { Lo CEq ; Hi CLt }) ; Hi (b |> { Lo CGt ; Hi CEq }) }
+thenC o k = o |> { CLt CLt ; CEq k ; CGt CGt }
+cmpCode x y = x |> { Code a6 a5 a4 a3 a2 a1 a0 (y |> { Code b6 b5 b4 b3 b2 b1 b0 (thenC (cmpBit a6 b6) (thenC (cmpBit a5 b5) (thenC (cmpBit a4 b4) (thenC (cmpBit a3 b3) (thenC (cmpBit a2 b2) (thenC (cmpBit a1 b1) (cmpBit a0 b0))))))) }) }
+cmpName m n = m |> { NNil (n |> { NNil CEq ; NCons c r CLt }) ; NCons a r (n |> { NNil CGt ; NCons b s (thenC (cmpCode a b) (cmpName r s)) }) }
+sHas n s = s |> { Ns0 No ; NsT t (t |> { NsB l m r (cmpName n m |> { CLt (sHas n l) ; CEq Yes ; CGt (sHas n r) }) }) }
+sAdd n s = s |> { Ns0 (NsT (NsB Ns0 n Ns0)) ; NsT t (t |> { NsB l m r (cmpName n m |> { CLt (NsT (NsB (sAdd n l) m r)) ; CEq s ; CGt (NsT (NsB l m (sAdd n r))) }) }) }
+setOf ns s = ns |> { NmNil s ; NmCons n r (setOf r (sAdd n s)) }
+dupS ns s = ns |> { NmNil No ; NmCons n r (sHas n s |> { Yes Yes ; No (dupS r (sAdd n s)) }) }
 eqN m n = m |> { Zero (n |> { Zero Yes ; Suc k No }) ; Suc j (n |> { Zero No ; Suc k (eqN j k) }) }
 isSKI n = orB (eqName n nameS) (orB (eqName n nameK) (eqName n nameI))
 nameAt := NCons codeAt NNil
@@ -138,7 +164,9 @@ appCI a b = a |> { CiNil b ; CiCons x r (CiCons x (appCI r b)) }
 ccCtor tn i ts = ts |> { TNil CGFail ; TCons t r (nameOf t |> { MNone CGFail ; MName c (ccFields tn i c Zero r) }) }
 ccFields tn i c k ts = ts |> { TNil (CG (NmCons c NmNil) (CiCons (CInfo c tn i k) CiNil) ts) ; TCons t r (nameOf t |> { MName f (ccFields tn i c (Suc k) r) ; MNone (isAlt t |> { Yes (ccCons c (CInfo c tn i k) (ccCtor tn (Suc i) r)) ; No (isNl t |> { Yes (CG (NmCons c NmNil) (CiCons (CInfo c tn i k) CiNil) ts) ; No CGFail }) }) }) }
 ccCons c x q = q |> { CGFail CGFail ; CG ns is r (CG (NmCons c ns) (CiCons x is) r) }
-findCI c is = is |> { CiNil MCNone ; CiCons x r (x |> { CInfo n tn i k (eqName c n |> { Yes (MC x) ; No (findCI c r) }) }) }
+cmAdd n x m = m |> { Cm0 (CmT (CmB Cm0 n x Cm0)) ; CmT t (t |> { CmB l k v r (cmpName n k |> { CLt (CmT (CmB (cmAdd n x l) k v r)) ; CEq (CmT (CmB l k x r)) ; CGt (CmT (CmB l k v (cmAdd n x r))) }) }) }
+findCI c m = m |> { Cm0 MCNone ; CmT t (t |> { CmB l k v r (cmpName c k |> { CLt (findCI c l) ; CEq (MC v) ; CGt (findCI c r) }) }) }
+ciMap is m = is |> { CiNil m ; CiCons x r (ciMap r (x |> { CInfo n tn i k (cmAdd n x m) })) }
 findTy tn ys = ys |> { TyNil MTNone ; TyCons y r (y |> { TyInfo n cs (eqName tn n |> { Yes (MTy cs) ; No (findTy tn r) }) }) }
 tyNames ys = ys |> { TyNil NmNil ; TyCons y r (y |> { TyInfo n cs (NmCons n (tyNames r)) }) }
 -- parsing: expressions
@@ -187,7 +215,7 @@ skiX xs = xs |> { XNil No ; XCons x r (orB (skiE x) (skiX r)) }
 skiB bs = bs |> { BNil No ; BCons b r (b |> { Br c ns x (orB (anySKI ns) (orB (skiE x) (skiB r))) }) }
 skiD ds = ds |> { DNil No ; DCons d r (orB (d |> { DEq n bs x (orB (anySKI bs) (skiE x)) ; DDef n x (skiE x) ; DType n cs No }) (skiD r)) }
 orderOf ds = ds |> { DNil NmNil ; DCons d r (d |> { DType n cs (appN cs (orderOf r)) ; DEq n bs x (NmCons n (orderOf r)) ; DDef n x (NmCons n (orderOf r)) }) }
-prelNotIn o ps = ps |> { NmNil NmNil ; NmCons p r (memN p o |> { Yes (prelNotIn o r) ; No (NmCons p (prelNotIn o r)) }) }
+prelNotIn o ps = ps |> { NmNil NmNil ; NmCons p r (sHas p o |> { Yes (prelNotIn o r) ; No (NmCons p (prelNotIn o r)) }) }
 -- desugaring: cells, picks and cases to applications and lambdas
 dapp f a = DApp (DAp f a)
 dsg ct ys e = e |> { EVar n (DName n) ; EApp p (p |> { EAp f a (dapp (dsg ct ys f) (dsg ct ys a)) }) ; ECell xs (dcell ct ys xs) ; EPick n x (dpick n (dsg ct ys x)) ; ECase x bs (dcase ct ys (dsg ct ys x) bs) ; ELam x b (DLam x (dsg ct ys b)) }
@@ -207,7 +235,7 @@ freeIn n d = d |> { DName m (eqName n m) ; DApp p (p |> { DAp f a (orB (freeIn n
 rapp f a = RAp (RA f a)
 rapps t cs = cs |> { NmNil t ; NmCons c r (rapps (rapp t (RVar c)) r) }
 findSub n ss = ss |> { SubNil MRNone ; SubCons k t v r (eqName n k |> { Yes (MR t) ; No (findSub n r) }) }
-resolve env n = eqName n nameS |> { Yes RS ; No (eqName n nameK |> { Yes RK ; No (eqName n nameI |> { Yes RI ; No (memN n env |> { Yes (RRef n) ; No RBad }) }) }) }
+resolve env n = eqName n nameS |> { Yes RS ; No (eqName n nameK |> { Yes RK ; No (eqName n nameI |> { Yes RI ; No (sHas n env |> { Yes (RRef n) ; No RBad }) }) }) }
 lamPs d = d |> { DName n NmNil ; DApp p NmNil ; DLam x b (NmCons x (lamPs b)) ; DBad NmNil }
 lamBody d = d |> { DName n d ; DApp p d ; DLam x b (lamBody b) ; DBad d }
 gen env sc ss d = d |> { DName n (findSub n ss |> { MR t t ; MRNone (memN n sc |> { Yes (RVar n) ; No (resolve env n) }) }) ; DApp p (p |> { DAp f a (rapp (gen env sc ss f) (gen env sc ss a)) }) ; DLam x b (lift env sc ss (lamPs d) (lamBody d)) ; DBad RBad }
@@ -224,24 +252,46 @@ two := Suc one
 three := Suc two
 four := Suc three
 argsFrom t j k = k |> { Zero t ; Suc m (argsFrom (rapp t (RIx j)) (Suc j) m) }
-preludeRules := RCons nameSuc (Rule (dum three) (rapp (RIx two) (RIx Zero))) (RCons nameZero (Rule (dum two) (RIx Zero)) (RCons nameCons (Rule (dum four) (rapp (rapp (RIx three) (RIx Zero)) (RIx one))) (RCons nameNil (Rule (dum two) (RIx Zero)) (RCons nameTl (Rule (dum one) (rapp (RIx Zero) (rapp RK RI))) (RCons nameHd (Rule (dum one) (rapp (RIx Zero) RK)) (RCons namePair (Rule (dum three) (rapp (rapp (RIx two) (RIx Zero)) (RIx one))) RNil))))))
+preludeRules := rAdd nameSuc (Rule (dum three) (rapp (RIx two) (RIx Zero))) (rAdd nameZero (Rule (dum two) (RIx Zero)) (rAdd nameCons (Rule (dum four) (rapp (rapp (RIx three) (RIx Zero)) (RIx one))) (rAdd nameNil (Rule (dum two) (RIx Zero)) (rAdd nameTl (Rule (dum one) (rapp (RIx Zero) (rapp RK RI))) (rAdd nameHd (Rule (dum one) (rapp (RIx Zero) RK)) (rAdd namePair (Rule (dum three) (rapp (rapp (RIx two) (RIx Zero)) (RIx one))) Rm0))))))
 arityOf ct c = findCI c ct |> { MCNone Zero ; MC x (x |> { CInfo n tn i k k }) }
 ctorRule k i n = Rule (dum (add k n)) (argsFrom (RIx (add k i)) Zero k)
-ctorsOf ct i n cs rs = cs |> { NmNil rs ; NmCons c r (ctorsOf ct (Suc i) n r (RCons c (ctorRule (arityOf ct c) i n) rs)) }
+ctorsOf ct i n cs rs = cs |> { NmNil rs ; NmCons c r (ctorsOf ct (Suc i) n r (rAdd c (ctorRule (arityOf ct c) i n) rs)) }
 ctorRules ct ys rs = ys |> { TyNil rs ; TyCons y r (y |> { TyInfo tn cs (ctorRules ct r (ctorsOf ct Zero (lenN cs) cs rs)) }) }
 yComb := rapp (rapp RS (rapp RK (rapp (rapp RS RI) RI))) (rapp (rapp RS (rapp (rapp RS (rapp RK RS)) RK)) (rapp RK (rapp (rapp RS RI) RI)))
 eqsOf ct ys ds = ds |> { DNil ExNil ; DCons d r (d |> { DEq n bs x (ExCons (EqX n bs (dsg ct ys x) NmNil) (eqsOf ct ys r)) ; DDef n x (eqsOf ct ys r) ; DType n cs (eqsOf ct ys r) }) }
-eqDeps all bs b = all |> { ExNil NmNil ; ExCons q r (q |> { EqX m bs2 b2 d2 (andB (freeIn m b) (notB (memN m bs)) |> { Yes (NmCons m (eqDeps r bs b)) ; No (eqDeps r bs b) }) }) }
-depsAll all es = es |> { ExNil ExNil ; ExCons q r (q |> { EqX n bs b d (ExCons (EqX n bs b (eqDeps all bs b)) (depsAll all r)) }) }
-depsOf dd m = dd |> { ExNil NmNil ; ExCons q r (q |> { EqX n bs b d (eqName m n |> { Yes d ; No (depsOf r m) }) }) }
-closure dd todo seen = todo |> { NmNil seen ; NmCons m r (memN m seen |> { Yes (closure dd r seen) ; No (closure dd (appN (depsOf dd m) r) (NmCons m seen)) }) }
-reachAll dd es = es |> { ExNil ExNil ; ExCons q r (q |> { EqX n bs b d (ExCons (EqX n bs b (closure dd d NmNil)) (reachAll dd r)) }) }
-grp n rch all = all |> { ExNil ExNil ; ExCons q r (q |> { EqX m bs b rm (orB (eqName m n) (andB (memN m rch) (memN n rm)) |> { Yes (ExCons q (grp n rch r)) ; No (grp n rch r) }) }) }
+-- an equation's dependencies: the equations its body names outside its
+-- binders; the groups are the strongly connected components (Tarjan)
+fnames d bound acc = d |> { DName m (memN m bound |> { Yes acc ; No (NmCons m acc) }) ; DApp p (p |> { DAp f a (fnames f bound (fnames a bound acc)) }) ; DLam x b (fnames b (NmCons x bound) acc) ; DBad acc }
+onlyIn s ns = ns |> { NmNil NmNil ; NmCons n r (sHas n s |> { Yes (NmCons n (onlyIn s r)) ; No (onlyIn s r) }) }
+depsAll eqs es = es |> { ExNil ExNil ; ExCons q r (q |> { EqX n bs b d (ExCons (EqX n bs b (onlyIn eqs (fnames b bs NmNil))) (depsAll eqs r)) }) }
+tjSet n x m = m |> { Tj0 (TjT (TjB Tj0 n x Tj0)) ; TjT t (t |> { TjB l k v r (cmpName n k |> { CLt (TjT (TjB (tjSet n x l) k v r)) ; CEq (TjT (TjB l k x r)) ; CGt (TjT (TjB l k v (tjSet n x r))) }) }) }
+tjGet n m = m |> { Tj0 MTjNone ; TjT t (t |> { TjB l k v r (cmpName n k |> { CLt (tjGet n l) ; CEq (MTj v) ; CGt (tjGet n r) }) }) }
+tjInit es m = es |> { ExNil m ; ExCons q r (q |> { EqX n bs b d (tjInit r (tjSet n (TjE d No Zero Zero No) m)) }) }
+minN a b = a |> { Zero Zero ; Suc j (b |> { Zero Zero ; Suc k (Suc (minN j k)) }) }
+tarjan es s = es |> { ExNil s ; ExCons q r (q |> { EqX n bs b d (tarjan r (seen n s |> { Yes s ; No (strong n s) })) }) }
+seen n s = s |> { Tst c stk m out (tjGet n m |> { MTjNone Yes ; MTj e (e |> { TjE d v i l o v }) }) }
+strong v s = s |> { Tst c stk m out (tjGet v m |> { MTjNone s ; MTj e (e |> { TjE d vis i l o (finish v (edges v d (Tst (Suc c) (NmCons v stk) (tjSet v (TjE d Yes c c Yes) m) out))) }) }) }
+edges v ws s = ws |> { NmNil s ; NmCons w r (edges v r (edge v w s)) }
+edge v w s = s |> { Tst c stk m out (tjGet w m |> { MTjNone s ; MTj e (e |> { TjE d vis wi wl won (vis |> { No (lowOf v w (strong w s)) ; Yes (won |> { Yes (lower v wi s) ; No s }) }) }) }) }
+lowOf v w s = s |> { Tst c stk m out (tjGet w m |> { MTjNone s ; MTj e (e |> { TjE d vis wi wl won (lower v wl s) }) }) }
+lower v x s = s |> { Tst c stk m out (tjGet v m |> { MTjNone s ; MTj e (e |> { TjE d vis vi vl von (Tst c stk (tjSet v (TjE d vis vi (minN vl x) von) m) out) }) }) }
+finish v s = s |> { Tst c stk m out (tjGet v m |> { MTjNone s ; MTj e (e |> { TjE d vis vi vl von (eqN vi vl |> { Yes (popTo v NmNil s) ; No s }) }) }) }
+popTo v acc s = s |> { Tst c stk m out (stk |> { NmNil (Tst c stk m (ScCons acc out)) ; NmCons w r (popOff v w acc (Tst c r (offStack w m) out)) }) }
+popOff v w acc s = eqName w v |> { Yes (s |> { Tst c stk m out (Tst c stk m (ScCons (NmCons w acc) out)) }) ; No (popTo v (NmCons w acc) s) }
+offStack w m = tjGet w m |> { MTjNone m ; MTj e (e |> { TjE d vis i l o (tjSet w (TjE d vis i l No) m) }) }
+gmSet n x m = m |> { Gm0 (GmT (GmB Gm0 n x Gm0)) ; GmT t (t |> { GmB l k v r (cmpName n k |> { CLt (GmT (GmB (gmSet n x l) k v r)) ; CEq (GmT (GmB l k x r)) ; CGt (GmT (GmB l k v (gmSet n x r))) }) }) }
+gmGet n m = m |> { Gm0 MGNone ; GmT t (t |> { GmB l k v r (cmpName n k |> { CLt (gmGet n l) ; CEq (MG v) ; CGt (gmGet n r) }) }) }
+-- each component's first equation in declaration order compiles it; a
+-- component of one is a recursion if the equation depends on itself
+selfDep n m = tjGet n m |> { MTjNone No ; MTj e (e |> { TjE d vis i l o (memN n d) }) }
+inDecl es c = es |> { ExNil ExNil ; ExCons q r (q |> { EqX n bs b d (memN n c |> { Yes (ExCons q (inDecl r c)) ; No (inDecl r c) }) }) }
+skipAll g m = g |> { ExNil m ; ExCons q r (q |> { EqX n bs b d (skipAll r (gmSet n GSkip m)) }) }
+firstOf g m = g |> { ExNil m ; ExCons q r (q |> { EqX n bs b d (skipAll r (gmSet n (GMulti g) m)) }) }
+groupsOf es tj cs g = cs |> { ScNil g ; ScCons c r (groupsOf es tj r (c |> { NmNil g ; NmCons n rest (rest |> { NmNil (gmSet n (GSingle (selfDep n tj)) g) ; NmCons x y (firstOf (inDecl es c) g) }) })) }
 namesX g = g |> { ExNil NmNil ; ExCons q r (q |> { EqX n bs b d (NmCons n (namesX r)) }) }
 lenX g = g |> { ExNil Zero ; ExCons q r (Suc (lenX r)) }
-eqRules env all es gd rs = es |> { ExNil rs ; ExCons q r (q |> { EqX n bs b rch (memN n gd |> { Yes (eqRules env all r gd rs) ; No (eqGroup env all r gd rs q (grp n rch all)) }) }) }
-eqGroup env all r gd rs q g = eqRules env all r (appN (namesX g) gd) (g |> { ExNil rs ; ExCons m rest (rest |> { ExNil (single env q rs) ; ExCons m2 r2 (multi env g rs) }) })
-single env q rs = q |> { EqX n bs b rch (memN n rch |> { No (RCons n (Rule bs (gen env bs SubNil b)) rs) ; Yes (RCons n (Rule NmNil (rapp yComb (RRule (Rule (NmCons nameAt bs) (gen env (NmCons nameAt bs) (SubCons n (RVar nameAt) nameAt SubNil) b))))) rs) }) }
+eqRules env gs es rs = es |> { ExNil rs ; ExCons q r (eqRules env gs r (q |> { EqX n bs b d (gmGet n gs |> { MGNone rs ; MG i (i |> { GSingle self (single env self q rs) ; GMulti g (multi env g rs) ; GSkip rs }) }) })) }
+single env self q rs = q |> { EqX n bs b d (self |> { No (rAdd n (Rule bs (gen env bs SubNil b)) rs) ; Yes (rAdd n (Rule NmNil (rapp yComb (RRule (Rule (NmCons nameAt bs) (gen env (NmCons nameAt bs) (SubCons n (RVar nameAt) nameAt SubNil) b))))) rs) }) }
 tupleR nn = Rule (dum (Suc nn)) (argsFrom (RIx nn) Zero nn)
 pickR nn j = Rule (dum nn) (RIx j)
 selR nn j = Rule (dum one) (rapp (RIx Zero) (RRule (pickR nn j)))
@@ -250,11 +300,11 @@ codeR env ss m = m |> { EqX n bs b d (Rule (NmCons nameAt bs) (gen env (NmCons n
 codes env ss g t = g |> { ExNil t ; ExCons m r (codes env ss r (rapp t (rapp (RRule (codeR env ss m)) (RIx Zero)))) }
 genR env nn ss g = Rule (dum one) (codes env ss g (RRule (tupleR nn)))
 multi env g rs = g |> { ExNil rs ; ExCons m r (m |> { EqX n bs b d (multi2 env g (lenX g) (NCons codeAt n) rs) }) }
-multi2 env g nn key rs = members g nn Zero key (RCons key (Rule NmNil (rapp yComb (RRule (genR env nn (subsOf nn Zero g) g)))) rs)
-members g nn j key rs = g |> { ExNil rs ; ExCons m r (m |> { EqX n bs b d (members r nn (Suc j) key (RCons n (Rule NmNil (rapp (RRule (selR nn j)) (RRef key))) rs)) }) }
-defRules env ct ys ds rs = ds |> { DNil rs ; DCons d r (d |> { DDef n x (defRules env ct ys r (RCons n (Rule NmNil (gen env NmNil SubNil (dsg ct ys x))) rs)) ; DEq n bs x (defRules env ct ys r rs) ; DType n cs (defRules env ct ys r rs) }) }
+multi2 env g nn key rs = members g nn Zero key (rAdd key (Rule NmNil (rapp yComb (RRule (genR env nn (subsOf nn Zero g) g)))) rs)
+members g nn j key rs = g |> { ExNil rs ; ExCons m r (m |> { EqX n bs b d (members r nn (Suc j) key (rAdd n (Rule NmNil (rapp (RRule (selR nn j)) (RRef key))) rs)) }) }
+defRules env ct ys ds rs = ds |> { DNil rs ; DCons d r (d |> { DDef n x (defRules env ct ys r (rAdd n (Rule NmNil (gen env NmNil SubNil (dsg ct ys x))) rs)) ; DEq n bs x (defRules env ct ys r rs) ; DType n cs (defRules env ct ys r rs) }) }
 badT t = t |> { RVar n No ; RIx k No ; RRef n No ; RS No ; RK No ; RI No ; RAp p (p |> { RA f a (orB (badT f) (badT a)) }) ; RRule r (r |> { Rule fs b (badT b) }) ; RBad Yes }
-badRs rs = rs |> { RNil No ; RCons n r rest (orB (r |> { Rule fs b (badT b) }) (badRs rest)) }
+badRs m = m |> { Rm0 No ; RmT t (t |> { RmB l n x r (orB (x |> { Rule fs b (badT b) }) (orB (badRs l) (badRs r))) }) }
 -- expansion: every reference inlined, every rule's formals abstracted
 app e f = TA (Ap e f)
 free x t = t |> { TS No ; TK No ; TI No ; TV n (eqN x n) ; TA p (p |> { Ap e f (orB (free x e) (free x f)) }) }
@@ -262,12 +312,14 @@ isV x t = t |> { TS No ; TK No ; TI No ; TV n (eqN x n) ; TA p No }
 abs x t = t |> { TS (app TK TS) ; TK (app TK TK) ; TI (app TK TI) ; TV n (eqN x n |> { Yes TI ; No (app TK (TV n)) }) ; TA p (p |> { Ap e f (free x t |> { No (app TK t) ; Yes (andB (isV x f) (notB (free x e)) |> { Yes e ; No (app (app TS (abs x e)) (abs x f)) }) }) }) }
 absAll i fs t = fs |> { NmNil t ; NmCons f r (abs i (absAll (Suc i) r t)) }
 lastFrom n fs i best = fs |> { NmNil best ; NmCons f r (lastFrom n r (Suc i) (eqName n f |> { Yes i ; No best })) }
-findMe n me = me |> { MeNil MTmNone ; MeCons m t r (eqName n m |> { Yes (MTm t) ; No (findMe n r) }) }
-findR n rs = rs |> { RNil MRuNone ; RCons m r rest (eqName n m |> { Yes (MRu r) ; No (findR n rest) }) }
+meAdd n x m = m |> { Me0 (MeT (MeB Me0 n x Me0)) ; MeT t (t |> { MeB l k v r (cmpName n k |> { CLt (MeT (MeB (meAdd n x l) k v r)) ; CEq (MeT (MeB l k x r)) ; CGt (MeT (MeB l k v (meAdd n x r))) }) }) }
+findMe n m = m |> { Me0 MTmNone ; MeT t (t |> { MeB l k v r (cmpName n k |> { CLt (findMe n l) ; CEq (MTm v) ; CGt (findMe n r) }) }) }
+rAdd n x m = m |> { Rm0 (RmT (RmB Rm0 n x Rm0)) ; RmT t (t |> { RmB l k v r (cmpName n k |> { CLt (RmT (RmB (rAdd n x l) k v r)) ; CEq (RmT (RmB l k x r)) ; CGt (RmT (RmB l k v (rAdd n x r))) }) }) }
+findR n m = m |> { Rm0 MRuNone ; RmT t (t |> { RmB l k v r (cmpName n k |> { CLt (findR n l) ; CEq (MRu v) ; CGt (findR n r) }) }) }
 -- a name met again while its own term is being made is a cycle: the
 -- memo records it under the name `@`, and the result is an error
-tof rs n me path = findMe n me |> { MTm t (TM t me) ; MTmNone (memN n path |> { Yes (TM TI (MeCons nameAt TI me)) ; No (findR n rs |> { MRuNone (TM TI me) ; MRu r (tofAdd n (ruleTm rs r me (NmCons n path))) }) }) }
-tofAdd n q = q |> { TM t me (TM t (MeCons n t me)) }
+tof rs n me path = findMe n me |> { MTm t (TM t me) ; MTmNone (memN n path |> { Yes (TM TI (meAdd nameAt TI me)) ; No (findR n rs |> { MRuNone (TM TI me) ; MRu r (tofAdd n (ruleTm rs r me (NmCons n path))) }) }) }
+tofAdd n q = q |> { TM t me (TM t (meAdd n t me)) }
 -- A rule's body is abstracted with each reference a leaf, a variable
 -- numbered past the formals, and each leaf is then replaced by its term:
 -- the terms are closed, so this is the abstraction of the inlined body.
@@ -285,12 +337,13 @@ outAll rs ns me = ns |> { NmNil (OA ONil me) ; NmCons n r (outAll2 n (tof rs n m
 outAll2 n q k = q |> { TM t me (k me |> { OA os me2 (OA (OCons n t os) me2) }) }
 -- the front end: characters to every name's term
 front s = front2 (lx s)
-front2 raw = cc TNl raw |> { CRFail RErr ; CR ct ys (front3 ct ys (pprog ct (nlf Zero raw))) }
-front3 ct ys p = p |> { PDFail RErr ; PD ds (orB (skiD ds) (orB (dupN (orderOf ds)) (dupN (tyNames ys))) |> { Yes RErr ; No (front4 ct ys ds (orderOf ds)) }) }
-front4 ct ys ds o = front5 ct ys ds (appN o (prelNotIn o preludeNames))
-front5 ct ys ds env = front5a ct ys ds env (eqsOf ct ys ds)
-front5a ct ys ds env es = front5b ct ys ds env (depsAll es es)
-front5b ct ys ds env dd = front5c ct ys ds env (reachAll dd dd)
-front5c ct ys ds env rr = front6 env (defRules env ct ys ds (eqRules env rr rr NmNil (ctorRules ct ys preludeRules)))
-front6 env rs = badRs rs |> { Yes RErr ; No (front7 (outAll rs env MeNil)) }
+front2 raw = cc TNl raw |> { CRFail RErr ; CR is ys (front2b (ciMap is Cm0) ys raw) }
+front2b ct ys raw = front3 ct ys (pprog ct (nlf Zero raw))
+front3 ct ys p = p |> { PDFail RErr ; PD ds (orB (skiD ds) (orB (dupS (orderOf ds) Ns0) (dupS (tyNames ys) Ns0)) |> { Yes RErr ; No (front4 ct ys ds (orderOf ds)) }) }
+front4 ct ys ds o = front5 ct ys ds (appN o (prelNotIn (setOf o Ns0) preludeNames))
+front5 ct ys ds env = front5a ct ys ds env (setOf env Ns0) (eqsOf ct ys ds)
+front5a ct ys ds env es0 eqs = front5b ct ys ds env es0 (depsAll (setOf (namesX eqs) Ns0) eqs)
+front5b ct ys ds env es0 dd = front5c ct ys ds env es0 dd (tarjan dd (Tst Zero NmNil (tjInit dd Tj0) ScNil))
+front5c ct ys ds env es0 dd st = st |> { Tst c stk m out (front6 env (defRules es0 ct ys ds (eqRules es0 (groupsOf dd m out Gm0) dd (ctorRules ct ys preludeRules)))) }
+front6 env rs = badRs rs |> { Yes RErr ; No (front7 (outAll rs env Me0)) }
 front7 q = q |> { OA os me (findMe nameAt me |> { MTm t RErr ; MTmNone (ROk os) }) }
