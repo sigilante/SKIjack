@@ -743,35 +743,129 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 out_.add(k)
         return out_
 
-    # --- pass 4: recursion.  Per-equation fixpoint; mutual recursion is refused.
-    for key in lowered:
-        for okey in _dep_keys(key):
-            if okey == key:
-                continue
-            if key in _dep_keys(okey):
-                raise ExpandError(
-                    f"equations {key[1]!r} and {okey[1]!r} are mutually recursive; "
-                    f"this expander ties one fixpoint per equation and cannot "
-                    f"compile mutual recursion yet")
+    # --- pass 4: recursion.  An equation that calls only itself ties its
+    # own fixpoint, `name := Y nameGen`, nameGen taking itself first.  A
+    # group of mutually recursive equations ties one fixpoint for all of
+    # them: its generator takes the group -- a Scott tuple of the members --
+    # and returns the tuple of their codes, each applied to it; a member is
+    # its projection from `Y` of the generator, and inside the group a call
+    # to a member is its projection from the tuple.
+    def _groups():
+        """Tarjan over the equations, in their order; each group's members
+        in declaration order."""
+        order = list(lowered)
+        at = {k: i for i, k in enumerate(order)}
+        index: Dict = {}
+        low: Dict = {}
+        stack: List = []
+        on: Set = set()
+        out_: List[List] = []
+        counter = [0]
 
-    for key, equation in lowered.items():
+        def visit(v_):
+            index[v_] = low[v_] = counter[0]
+            counter[0] += 1
+            stack.append(v_)
+            on.add(v_)
+            for w in sorted(_dep_keys(v_), key=lambda k: at[k]):
+                if w not in index:
+                    visit(w)
+                    low[v_] = min(low[v_], low[w])
+                elif w in on:
+                    low[v_] = min(low[v_], index[w])
+            if low[v_] == index[v_]:
+                grp = []
+                while True:
+                    w = stack.pop()
+                    on.discard(w)
+                    grp.append(w)
+                    if w == v_:
+                        break
+                out_.append(sorted(grp, key=lambda k: at[k]))
+
+        for k in order:
+            if k not in index:
+                visit(k)
+        return out_
+
+    def _bname(key):
         core, name = key
-        bname = backend[name] if core is None else equation_backend[(core, name)]
-        gen = cg.with_resolver(resolver(core))
-        recursive = key in _dep_keys(key)
-        if recursive:
-            selfp = _fresh("f", set(equation.binders) | free_names(equation.body))
-            body = substitute(equation.body, {name: A.Name(selfp)})
-            scope = [selfp] + list(equation.binders)
-            gen_name = _mangle(bname + "Gen", used)
-            used.add(gen_name)
-            term = gen.gen(body, scope, bname)
-            env.define_rule(gen_name, tuple(scope), term)
-            env.define_alias(bname, K_(a("Y"), a(gen_name)))
-        else:
-            scope = list(equation.binders)
-            term = gen.gen(equation.body, scope, bname)
-            env.define_rule(bname, tuple(scope), term)
+        return backend[name] if core is None else equation_backend[(core, name)]
+
+    for group in _groups():
+        if len(group) == 1:
+            key = group[0]
+            core, name = key
+            equation = lowered[key]
+            bname = _bname(key)
+            gen = cg.with_resolver(resolver(core))
+            recursive = key in _dep_keys(key)
+            if recursive:
+                selfp = _fresh("f", set(equation.binders) | free_names(equation.body))
+                body = substitute(equation.body, {name: A.Name(selfp)})
+                scope = [selfp] + list(equation.binders)
+                gen_name = _mangle(bname + "Gen", used)
+                used.add(gen_name)
+                term = gen.gen(body, scope, bname)
+                env.define_rule(gen_name, tuple(scope), term)
+                env.define_alias(bname, K_(a("Y"), a(gen_name)))
+            else:
+                scope = list(equation.binders)
+                term = gen.gen(equation.body, scope, bname)
+                env.define_rule(bname, tuple(scope), term)
+            continue
+        n = len(group)
+        gname = _mangle(_bname(group[0]) + "Group", used)
+        used.add(gname)
+        # the tuple, its projections: tuple x1 .. xn c = c x1 .. xn, and
+        # sel_j t = t (pick_j), pick_j x1 .. xn = x_j
+        xs = [f"\x00x{i}" for i in range(n)]
+        tup = _mangle(gname + "Tuple", used)
+        used.add(tup)
+        env.define_rule(tup, tuple(xs) + ("\x00c",), K_(v("\x00c"), *[v(x) for x in xs]))
+        sels = []
+        for j in range(n):
+            pick = _mangle(f"{gname}Pick{j}", used)
+            used.add(pick)
+            env.define_rule(pick, tuple(xs), v(xs[j]))
+            sel = _mangle(f"{gname}Sel{j}", used)
+            used.add(sel)
+            env.define_rule(sel, ("\x00t",), K_(v("\x00t"), a(pick)))
+            sels.append(sel)
+        # each member's code takes the group first; its calls to members
+        # (itself too) project from it
+        codes = []
+        for j, key in enumerate(group):
+            core, name = key
+            equation = lowered[key]
+            taken = set(equation.binders) | free_names(equation.body)
+            grp = _fresh("g", taken)
+            sub = {}
+            for i, okey in enumerate(group):
+                ocore, oname = okey
+                # a member is reached by its source name from this body when
+                # the name resolves to it from here
+                if _key_of(core, oname) == okey:
+                    sub[oname] = A.App(A.Name("\x00sel%d" % i), A.Name(grp))
+            body = substitute(equation.body, sub)
+            scope = [grp] + list(equation.binders)
+            code = _mangle(_bname(key) + "Code", used)
+            used.add(code)
+
+            def resolve_in(nm, _core=core):
+                if nm.startswith("\x00sel"):
+                    return a(sels[int(nm[len("\x00sel"):])])
+                return resolver(_core)(nm)
+            term = cg.with_resolver(resolve_in).gen(body, scope, _bname(key))
+            env.define_rule(code, tuple(scope), term)
+            codes.append(code)
+        gen_name = _mangle(gname + "Gen", used)
+        used.add(gen_name)
+        env.define_rule(gen_name, ("\x00t",),
+                        K_(a(tup), *[KApp(a(c), v("\x00t")) for c in codes]))
+        env.define_alias(gname, K_(a("Y"), a(gen_name)))
+        for j, key in enumerate(group):
+            env.define_alias(_bname(key), K_(a(sels[j]), a(gname)))
 
     # --- plain definitions (``name := expr``)
     for d in defs:

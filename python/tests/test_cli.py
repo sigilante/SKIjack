@@ -155,11 +155,11 @@ def test_a_parse_error_is_reported_with_its_location(tmp_path):
 
 def test_an_expander_rejection_is_reported(tmp_path):
     """ExpandError is not a CheckError; this is the case the old handler
-    missed for every mutually recursive program."""
-    f = _write(tmp_path, "mutual.ascii.ski",
+    missed for every mutually recursive program, which now compiles: a
+    quotation without an object type is the expander's to refuse."""
+    f = _write(tmp_path, "noobject.ascii.ski",
                "nat === Zero | Suc nat\n"
-               "even n = n |> { Zero Zero ; Suc m odd m }\n"
-               "odd  n = n |> { Zero (Suc Zero) ; Suc m even m }\n")
+               "q := <Zero>\n")
     code, _, err = run(f)
     assert code == 1 and "Traceback" not in err and err.strip()
 
