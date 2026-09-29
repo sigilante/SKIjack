@@ -207,3 +207,13 @@ def test_random_programs_compile_as_spec0_has_them():
 def test_the_front_end_compiles_itself():
     why, status, n = run0.fixed_point(AVON)
     assert why == "" and n > 300, why
+
+
+@needs_avon
+def test_the_profile_charges_every_contraction_to_a_row(tmp_path):
+    names = tmp_path / "front0.names.tsv"
+    assert run0.names_file(names) > 300
+    status, rows = run0.profile(AVON, run0.EDGES["a mutual pair"], names)
+    assert status.startswith("NORMAL")
+    assert sum(c for c, _ in rows) == int(status.split()[1])
+    assert "eqCode" in {run0.equation_of(label) for _, label in rows}

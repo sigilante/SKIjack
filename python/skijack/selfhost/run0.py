@@ -1,6 +1,7 @@
 """Running the SKIjack-0 front end in a reducer, and checking it.
 
     python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges]
+    python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
 characters, it reduces to every name's closed term.  This module compiles
@@ -18,6 +19,11 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 - ``--edges``: the programs of :data:`EDGES`, which the front end must
   accept or refuse as spec0 does.
 
+``--profile`` runs the front end on FILE (default: its own source) with
+Avon's ``--profile``, which charges each contraction to the named term
+whose code it runs, and totals the rows by equation: a lifted lambda
+(``f~lambda2``) and a recursion's body (``f.body``) count as ``f``.
+
 A call of the non-sharing reference reducer would recompute every shared
 value, which the front end has many of; it serves for the lexer's tests
 only (``tests/test_front0.py``).
@@ -29,8 +35,10 @@ import argparse
 import functools
 import pathlib
 import random
+import re
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Dict, List, Optional, Tuple
 
@@ -138,15 +146,86 @@ def job(text: str) -> str:
                        App(t["front"], encode(text))))
 
 
-def run_avon(avon: str, text: str, fuel: int = 10 ** 12) -> Tuple[str, str]:
+def run_avon(avon: str, text: str, fuel: int = 10 ** 12,
+             extra: Tuple[str, ...] = ()) -> Tuple[str, str]:
     """Avon's status line and printed normal form."""
+    status, body, _ = _avon(avon, text, fuel, extra)
+    return status, body
+
+
+def _avon(avon: str, text: str, fuel: int, extra: Tuple[str, ...]) -> Tuple[str, str, str]:
     p = subprocess.run([avon, "reduce", "--strategy=share", f"--fuel={fuel}",
-                        "--budget=200000000", "--max-nodes=1000000000"],
+                        "--budget=200000000", "--max-nodes=1000000000", *extra],
                        input=job(text), capture_output=True, text=True)
     if p.returncode not in (0, 1) or not p.stdout:
         raise RuntimeError(f"avon failed: {p.stderr.strip()[:400]}")
     status, _, body = p.stdout.partition("\n")
-    return status, body
+    return status, body, p.stderr
+
+
+# -------------------------------------------------------------- profile
+
+def _atoms(t: Term) -> int:
+    n, stack = 0, [t]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, App):
+            stack += [x.fn, x.arg]
+        else:
+            n += 1
+    return n
+
+
+#: a term smaller than this is generic -- `K K` is a dozen case branches --
+#: so naming it would take code from the equation it is written in
+MIN_ATOMS = 6
+
+
+def names_file(path: pathlib.Path) -> int:
+    """Every rule of the front end and the renderer of MIN_ATOMS atoms or
+    more, labelled, as `rule TAB label TAB hash` lines for Avon's
+    --profile."""
+    with Deep():
+        internals: Dict[str, Term] = {}
+        compile0(parse(FRONT.read_text(), "ascii"), internals)
+        t = compiled()
+        for n in ("render", "rOuts", "rTm", "rNat", "rName", "rCode", "rBit"):
+            internals[n] = t[n]
+        lines = [f"rule\t{k}\t{structural_hash(v)}" for k, v in internals.items()
+                 if _atoms(v) >= MIN_ATOMS]
+    path.write_text("\n".join(lines) + "\n")
+    return len(lines)
+
+
+def equation_of(label: str) -> str:
+    """The equation a profile row's code belongs to."""
+    return "/".join(sorted({re.sub(r"(~lambda\d+|\.body)$", "", part)
+                            for part in label.split("/")}))
+
+
+def profile(avon: str, text: str, names: pathlib.Path) -> Tuple[str, List[Tuple[int, str]]]:
+    """Avon's status, and its profile rows: contractions and label."""
+    status, _body, err = _avon(avon, text, 10 ** 12, (f"--profile={names}",))
+    rows = []
+    for line in err.splitlines():
+        m = re.match(r"\s*(\d+)\s+[\d.]+\s+(.*)$", line)
+        if m:
+            rows.append((int(m.group(1)), m.group(2)))
+    return status, rows
+
+
+def print_profile(status: str, rows: List[Tuple[int, str]], top: int = 40) -> None:
+    total = sum(c for c, _ in rows)
+    by_eq: Dict[str, int] = {}
+    for c, label in rows:
+        by_eq[equation_of(label)] = by_eq.get(equation_of(label), 0) + c
+    print(f"{status}; {total:,} contractions charged")
+    print("\nby equation (its lambdas and recursion body included):")
+    for eq, c in sorted(by_eq.items(), key=lambda kv: -kv[1])[:top]:
+        print(f"{c:>15,} {100 * c / total:6.2f}%  {eq}")
+    print("\nby rule:")
+    for c, label in rows[:top]:
+        print(f"{c:>15,} {100 * c / total:6.2f}%  {label}")
 
 
 # ------------------------------------------------------------- decoding
@@ -348,7 +427,16 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20260928)
     ap.add_argument("--edges", action="store_true", help="check the edge programs")
     ap.add_argument("--no-fixed-point", action="store_true")
+    ap.add_argument("--profile", nargs="?", const="", metavar="FILE",
+                    help="profile the front end on FILE (default: its own source)")
     a = ap.parse_args(argv)
+    if a.profile is not None:
+        text = pathlib.Path(a.profile).read_text() if a.profile else FRONT.read_text()
+        names = pathlib.Path(tempfile.mkdtemp()) / "front0.names.tsv"
+        names_file(names)
+        status, rows = profile(a.avon, text, names)
+        print_profile(status, rows)
+        return 0
     fail = 0
     check_front_term()
     if a.edges:

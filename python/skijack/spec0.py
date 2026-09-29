@@ -15,6 +15,7 @@ abstraction with the expander.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -208,6 +209,9 @@ class _Gen:
         self.rules = rules
         self.names = set(names)
         self.n = 0
+        self.owner = ""                 #: the rule being generated, for labels
+        self.lifts: Dict[str, int] = {}
+        self.labels: Dict[str, str] = {}
 
     def gen(self, e, scope: Sequence[str], sub: Dict[str, object]):
         if isinstance(e, A.Name):
@@ -237,6 +241,8 @@ class _Gen:
             captured = [s for s in scope if s in fv]
             self.n += 1
             name = f"\x00lift{self.n}"
+            self.lifts[self.owner] = self.lifts.get(self.owner, 0) + 1
+            self.labels[name] = f"{self.owner}~lambda{self.lifts[self.owner]}"
             inner = [s for s in sub if s not in params]
             term = self.gen(body, captured + params,
                             {k: sub[k] for k in inner})
@@ -248,9 +254,13 @@ class _Gen:
         raise Subset0Error(type(e).__name__)
 
 
-def compile0(program: A.Program) -> Dict[str, Term]:
+def compile0(program: A.Program,
+             internals: Optional[Dict[str, Term]] = None) -> Dict[str, Term]:
     """Every name's closed term: constructors, equations, definitions and
-    the prelude, as ``expand_program`` names them."""
+    the prelude, as ``expand_program`` names them.  With ``internals``,
+    also every rule's term under a label: a lifted lambda as
+    ``owner~lambdaN``, a recursion's body as ``name.body``, a group as
+    ``group(a,b,..)`` and its parts; profiles name code by these."""
     why = in_subset(program)
     if why:
         raise Subset0Error(f"outside SKIjack-0: {why}")
@@ -322,11 +332,14 @@ def compile0(program: A.Program) -> Dict[str, Term]:
         grouped.update(group)
         if len(group) == 1:
             if q.name not in reach[q.name]:
+                g.owner = q.name
                 rules[q.name] = Rule(tuple(q.binders), g.gen(bodies[q.name], q.binders, {}))
             else:                                       # Y gen, gen taking itself
                 selfv = "\x00self"
                 scope = [selfv] + list(q.binders)
+                g.owner = q.name
                 term = g.gen(bodies[q.name], scope, {q.name: Var(selfv)})
+                g.labels[q.name + "\x00gen"] = q.name + ".body"
                 rules[q.name + "\x00gen"] = Rule(tuple(scope), term)
                 rules[q.name] = Rule((), Ap(Ref("\x00Y"), Ref(q.name + "\x00gen")))
             continue
@@ -344,7 +357,9 @@ def compile0(program: A.Program) -> Dict[str, Term]:
             sub: Dict[str, object] = {o: Ap(Ref(f"{key}sel{i}"), Var(tv))
                                       for i, o in enumerate(group)}
             scope = [tv] + list(binders)
+            g.owner = m
             rules[f"{key}code{j}"] = Rule(tuple(scope), g.gen(bodies[m], scope, sub))
+            g.labels[f"{key}code{j}"] = m + ".body"
         rules[key + "gen"] = Rule(("t",), ap(Ref(key + "tuple"),
                                               *[Ap(Ref(f"{key}code{j}"), Var("t")) for j in range(size)]))
         rules[key] = Rule((), Ap(Ref("\x00Y"), Ref(key + "gen")))
@@ -352,6 +367,7 @@ def compile0(program: A.Program) -> Dict[str, Term]:
             rules[m] = Rule((), Ap(Ref(f"{key}sel{j}"), Ref(key)))
 
     for d in defs:
+        g.owner = d.name
         rules[d.name] = Rule((), g.gen(_desugar(d.expr, ctors, types), [], {}))
 
     # expansion: inline every reference, then abstract the formals
@@ -382,4 +398,16 @@ def compile0(program: A.Program) -> Dict[str, Term]:
             return term_of(t.rule)
         return KApp(inline(t.fn), inline(t.arg))
 
-    return {nm: term_of(nm) for nm in names}
+    out = {nm: term_of(nm) for nm in names}
+    if internals is not None:
+        for key, t in memo.items():
+            if key in g.labels:
+                internals[g.labels[key]] = t
+            elif key.startswith("\x00group:"):         # the group, its parts
+                part = re.fullmatch(r"\x00group:(.*?)(tuple|gen|pick\d+|sel\d+)?", key)
+                assert part
+                internals[f"group({part.group(1)})"
+                          + (f".{part.group(2)}" if part.group(2) else "")] = t
+            else:
+                internals[key] = t
+    return out
