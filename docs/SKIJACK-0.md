@@ -157,17 +157,25 @@ term is `S`, `K`, `I` or an application, as the compiler core in
 `avon/tests/selfhost/abstract.ascii.ski` encodes it, and the front end
 abstracts with that core's `abs`. `python3 -m skijack.selfhost.tables`
 writes its long, regular declarations: the classification of a code, the
-name constants, and the questions it asks of a token.
+reserved names and their numbers, and the questions it asks of a token.
+
+Inside, the front end interns every identifier after lexing: a name
+becomes a binary number, least significant bit first, and its tables --
+rules, finished terms, names in scope, constructors, and the recursion
+analysis's state -- are tries keyed by those bits. The reserved names
+(`S`, `K`, `I`, the prelude's, `@` and the empty name) are interned first,
+at fixed numbers. None of this shows in the terms it writes.
 
 `python/skijack/selfhost/run0.py` runs the front end. The front end shares
-many values, so it needs a reducer that shares; `run0` hands the term
-`render markers (front text)` to Avon's `reduce --strategy=share`, where
-`render` (`render0.ascii.ski`) writes the result out as a tree of marker
-atoms, and reads the printed normal form back. It checks, against
+many values, so it needs a reducer that shares: `run0` writes `front` and
+the constructors of its input as SKIT files, and `avon front0` builds the
+input, reduces in share mode, and reads the result by probing into a line
+per name, the name and its term's §5 hash. It checks, against
 `skijack.spec0`:
 
-- the fixed point: `front` applied to its own source gives all 433 of its
-  names their terms, hash for hash (about 1.3 billion reductions);
+- the fixed point: `front` applied to its own source gives all 492 of its
+  names their terms, hash for hash (307 million reductions, eight
+  seconds);
 - the random programs of `tests/test_spec0.py`, which it must compile as
   spec0 does;
 - the programs at the subset's edges in `run0.EDGES`, which it must accept

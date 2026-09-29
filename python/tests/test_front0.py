@@ -180,10 +180,6 @@ def test_the_front_end_is_in_the_subset_and_spec0_agrees_on_it():
     assert len(ref) > 300
 
 
-def test_the_renderer_leaves_the_front_end_as_it_is():
-    run0.check_front_term()
-
-
 AVON = os.environ.get("AVON")
 needs_avon = pytest.mark.skipif(not AVON, reason="AVON names no avon binary")
 
@@ -192,7 +188,7 @@ needs_avon = pytest.mark.skipif(not AVON, reason="AVON names no avon binary")
 @pytest.mark.parametrize("what", list(run0.EDGES))
 def test_an_edge_program_is_accepted_or_refused_as_spec0_has_it(what):
     text = run0.EDGES[what]
-    assert run0.compare(run0.decode(*run0.run_avon(AVON, text)), run0.reference(text)) == ""
+    assert run0.compare(run0.run_avon(AVON, text)[1], run0.reference(text)) == ""
 
 
 @needs_avon
@@ -201,12 +197,12 @@ def test_random_programs_compile_as_spec0_has_them():
     rng = random.Random(1)
     for _ in range(50):
         text = _program(rng)
-        assert run0.compare(run0.decode(*run0.run_avon(AVON, text)), run0.reference(text)) == ""
+        assert run0.compare(run0.run_avon(AVON, text)[1], run0.reference(text)) == ""
 
 
 @needs_avon
 def test_the_front_end_compiles_itself():
-    why, status, n = run0.fixed_point(AVON)
+    why, _steps, n = run0.fixed_point(AVON)
     assert why == "" and n > 300, why
 
 
@@ -214,7 +210,6 @@ def test_the_front_end_compiles_itself():
 def test_the_profile_charges_every_contraction_to_a_row(tmp_path):
     names = tmp_path / "front0.names.tsv"
     assert run0.names_file(names) > 300
-    status, rows = run0.profile(AVON, run0.EDGES["a mutual pair"], names)
-    assert status.startswith("NORMAL")
-    assert sum(c for c, _ in rows) == int(status.split()[1])
+    steps, rows = run0.profile(AVON, run0.EDGES["a mutual pair"], names)
+    assert sum(c for c, _ in rows) == int(steps)
     assert "eqCode" in {run0.equation_of(label) for _, label in rows}
