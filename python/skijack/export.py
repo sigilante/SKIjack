@@ -36,6 +36,16 @@ is classified by running it on marker atoms, never by its name: a core
 with an arm that fits none of these shapes, or with a user-written walker,
 step, loop or S/K/I arm, is left out and runs unjetted.
 
+It writes ``namespaces.tsv`` for Avon's scry stage (``avon/DESIGN.md`` §8):
+one line per resume-loop run that ``tests/test_scry.py`` pins, ``id  interp
+params  datum  fuel  max_rounds  eq  hit  notyet  zero  suc  result_ctors
+object_ctors  resolution  events  attempts``.  The terms are SKIT files
+(``params`` a comma list, the resolver's slot excluded; ``-`` for none);
+``fuel`` is a number or ``policy:START:CAP``; ``resolution`` is a file of
+``rendered path <TAB> answer file`` lines, or ``-``; ``events`` is
+``run_with_namespace``'s trace joined by ``|``; ``attempts`` lists every
+level-1 run it made, in order, as ``fuel:STATUS:steps``.
+
 It also writes the corpus's dictionary (``skijack.dictionary``), the table
 Avon's jets key on (``avon/DESIGN.md`` §5, §6): ``dictionary.tsv``, one
 line per distinct term, ``hash  atoms  printed-term``, and
@@ -74,7 +84,8 @@ from .generate import (find_answer_type, find_loop_types, find_object_type,
 from .probe import fast_reduce
 from .run import decode, peel, run_level1, run_policy
 
-__all__ = ["jam", "targets", "dictionary", "interpreters", "export"]
+__all__ = ["jam", "targets", "dictionary", "interpreters", "namespaces",
+           "export"]
 
 CAP = 5_000_000
 T3_CAP = 400_000
@@ -370,6 +381,79 @@ def interpreters():
     return [out[h] for h in sorted(out)] + [f"nat\t{z}\t{s}" for z, s in sorted(nats)]
 
 
+#: the resume-loop runs tests/test_scry.py pins: (id, program, resolution
+#: as {rendered path: answer name}, fuel or None, max_rounds, start, cap)
+NAMESPACE_RUNS = [
+    ("no-scry", "pIK", {}, 10, 10, 8, 4096),
+    ("one-block", "pIScryK", {"K": "ansI"}, 10, 10, 8, 4096),
+    ("chain", "pScryS", {"S": "ansScryK", "K": "ansI"}, 10, 10, 8, 4096),
+    ("stuck", "pIScryK", {}, 10, 10, 8, 4096),
+    ("timeout", "pOmega", {}, 5, 10, 8, 4096),
+    ("compound", "pScrySK", {"S K": "ansI"}, 10, 10, 8, 4096),
+    ("prefix-long", "pScrySKK", {"S K": "ansI", "S K K": "ansK"}, 10, 10, 8, 4096),
+    ("prefix-short", "pScrySK", {"S K": "ansI", "S K K": "ansK"}, 10, 10, 8, 4096),
+    ("wrong-fact", "pScrySK", {"K S": "ansI"}, 10, 10, 8, 4096),
+    ("policy", "pPolicy", {"K": "ansI"}, None, 10, 8, 4096),
+    ("policy-cap", "pOmega", {}, None, 10, 2, 8),
+    ("one-round-max", "pScryS", {"S": "ansScryK", "K": "ansI"}, 10, 1, 8, 4096),
+]
+
+
+def namespaces(outdir: pathlib.Path) -> List[str]:
+    """Run each pinned resume loop, recording every level-1 attempt, and
+    write its terms; the lines of ``namespaces.tsv``."""
+    from . import run as R
+    exp = expand_program(parse(corpus.read("scry-block", "ascii"), "ascii"))
+    at = exp.answer_type
+    shared = {"eq": exp.terms["EQ5"], "hit": exp.terms[at.hit.name],
+              "notyet": exp.terms[at.notyet.name]}
+    for key, term in shared.items():
+        (outdir / f"ns.{key}.skit").write_bytes(jam(term))
+    lines = []
+    for ident, pname, res_names, fuel, rounds, start, cap in NAMESPACE_RUNS:
+        prog = exp.level1[pname]
+        parts = {"interp": prog.interp_term, "datum": prog.datum,
+                 "zero": prog.zero, "suc": prog.suc}
+        for key, term in parts.items():
+            (outdir / f"ns.{pname}.{key}.skit").write_bytes(jam(term))
+        pfiles = []
+        for i, p in enumerate(prog.params[1:], 1):
+            (outdir / f"ns.{pname}.param{i}.skit").write_bytes(jam(p))
+            pfiles.append(f"ns.{pname}.param{i}.skit")
+        resolution = {k: exp.terms[v] for k, v in res_names.items()}
+        rfile = "-"
+        if res_names:
+            rfile = f"ns.{ident}.resolution.tsv"
+            rows = []
+            for k, v in res_names.items():
+                (outdir / f"ns.{v}.skit").write_bytes(jam(exp.terms[v]))
+                rows.append(f"{k}\tns.{v}.skit\n")
+            (outdir / rfile).write_text("".join(rows))
+        attempts = []
+        real = R.run_level1
+
+        def recording(packaged, max_steps=1_000_000, *, fuel=None, env=None):
+            out = real(packaged, max_steps, fuel=fuel, env=env)
+            attempts.append(f"{fuel}:{out.status.name}:{out.steps}")
+            return out
+        R.run_level1 = recording
+        try:
+            r = R.run_with_namespace(exp, prog, resolution, fuel, rounds,
+                                     max_steps=CAP, start=start, cap=cap)
+        finally:
+            R.run_level1 = real
+        lines.append("\t".join([
+            f"scry-block.{ident}", f"ns.{pname}.interp.skit",
+            ",".join(pfiles) or "-", f"ns.{pname}.datum.skit",
+            str(fuel) if fuel is not None else f"policy:{start}:{cap}",
+            str(rounds), "ns.eq.skit", "ns.hit.skit", "ns.notyet.skit",
+            f"ns.{pname}.zero.skit", f"ns.{pname}.suc.skit",
+            _ctors(prog.result_type),
+            _ctors(prog.object_type.decl, prog.object_type.app),
+            rfile, "|".join(r.events), ",".join(attempts)]))
+    return lines
+
+
 def export(outdir: pathlib.Path) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
     lines = []
@@ -380,6 +464,8 @@ def export(outdir: pathlib.Path) -> int:
         lines.append("\t".join([ident, fname, str(max_steps), status,
                                 str(steps), rctors, octors, ctor, payload]))
     (outdir / "manifest.tsv").write_text("\n".join(lines) + "\n")
+    (outdir / "namespaces.tsv").write_text(
+        "".join(line + "\n" for line in namespaces(outdir)))
     (outdir / "interpreters.tsv").write_text(
         "".join(line + "\n" for line in interpreters()))
     rows, names = dictionary()
