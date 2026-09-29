@@ -25,9 +25,12 @@ Two implementations are checked against `expand_program`:
   once, a lambda `\x. e`. No qualified names (`a.b`), no numbers but in a
   pick.
 - **Names.** No binder -- of an equation, a lambda or a case branch -- is
-  `S`, `K` or `I`: the expander would confuse it with the combinator. No
-  program name is an aviary bird (`B`, `C`, `W`, `Y`, …), which the
-  expander would resolve to the bird.
+  `S`, `K` or `I`: the expander would confuse it with the combinator.
+  Every name an expression uses is a binder in scope, a combinator, a
+  prelude name or a declared name; the expander would resolve an
+  undeclared aviary bird (`B`, `C`, `W`, `Y`, …) to the bird. No name is
+  declared twice, as a constructor, an equation or a definition, and no
+  type is.
 - **Lexicon.** ASCII only.
 
 ## 2. Lexing
@@ -57,7 +60,10 @@ arity. A case branch takes as many binders as its constructor has fields.
 
 A program is declarations separated by newlines; a declaration opens with
 a run of names and the operator after it says which it is. Inside `( )`,
-`[ ]` and a case's `{ }`, newlines are ignored.
+`[ ]` and a case's `{ }`, newlines are ignored, but for a newline directly
+before the bracket that closes the outermost group: that one ends the
+declaration, an error. A case's `}` therefore sits on the line of its last
+branch.
 
 ```
 expr   = app ( "|>" "{" branch ( ";" branch )* "}" )*
@@ -128,7 +134,9 @@ equations that reach one another, ordered by declaration.
   names a member.
 
 **A definition** `name := expr` is its expression, generated in the empty
-scope.
+scope. Only a recursive equation may refer to itself: references that
+return to their rule some other way -- `d := e` and `e := d`, or `f x = d`
+and `d := f` -- are an error.
 
 **The term of a rule** is its body with every reference replaced by that
 rule's term, then abstracted over its formals, the last first:
@@ -140,8 +148,31 @@ against aviary's on every abstraction of the corpus.
 
 ## 5. What the front end reads and writes
 
-The front end reads the program as a list of characters, each a
-constructor of a 128-way character type, and writes, for each name in
-declaration order and then the prelude's, the name and its term as an
-encoded term. `avon/tests/selfhost/` holds the drivers and the fixed-point
-check.
+The front end is `python/skijack/selfhost/front0.ascii.ski`, one term,
+`front`. It reads the program as a list of 7-bit character codes and
+reduces to `ROk` of a list holding, for each name in declaration order and
+then each prelude name the program does not declare, the name and its
+term; or to `RErr`, if the program is outside the subset or ill-formed. A
+term is `S`, `K`, `I` or an application, as the compiler core in
+`avon/tests/selfhost/abstract.ascii.ski` encodes it, and the front end
+abstracts with that core's `abs`. `python3 -m skijack.selfhost.tables`
+writes its long, regular declarations: the classification of a code, the
+name constants, and the questions it asks of a token.
+
+`python/skijack/selfhost/run0.py` runs the front end. The front end shares
+many values, so it needs a reducer that shares; `run0` hands the term
+`render markers (front text)` to Avon's `reduce --strategy=share`, where
+`render` (`render0.ascii.ski`) writes the result out as a tree of marker
+atoms, and reads the printed normal form back. It checks, against
+`skijack.spec0`:
+
+- the fixed point: `front` applied to its own source gives all 375 of its
+  names their terms, hash for hash (about 2.2 billion reductions);
+- the random programs of `tests/test_spec0.py`, which it must compile as
+  spec0 does;
+- the programs at the subset's edges in `run0.EDGES`, which it must accept
+  or refuse as spec0 does.
+
+`tests/test_front0.py` runs the lexer in the reference reducer, and the
+three checks in Avon when `AVON` names an avon binary.
+`avon/tests/front0_check.sh` runs them at full size.

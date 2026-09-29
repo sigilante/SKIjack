@@ -13,10 +13,12 @@ import random
 import sys
 
 import pytest
+from aviary_kernel.abstraction import ExpansionError
 
 import skijack
 from skijack import corpus
 from skijack.dictionary import structural_hash
+from skijack.errors import SkijackError
 from skijack.parser import parse
 from skijack.spec0 import Subset0Error, compile0, in_subset
 
@@ -50,6 +52,20 @@ def test_the_programs_outside_the_subset_are_named():
         assert in_subset(parse(corpus.read(stem, "ascii"), "ascii")) == why
     with pytest.raises(Subset0Error):
         compile0(parse("f S = S\n", "ascii"))
+
+
+@pytest.mark.parametrize("src", [
+    "f x = x\nf x = x\n",
+    "nat === Zero | Suc nat\nZero x = x\n",
+    "nat === Zero | Suc nat\nnat === One\n",
+    "d := e\ne := d\n",
+    "f x = d\nd := f\n",
+])
+def test_what_the_expander_refuses_spec0_refuses(src):
+    with pytest.raises((SkijackError, ExpansionError)):
+        skijack.compile(src, lexicon="ascii", check=False)
+    with pytest.raises(Subset0Error):
+        compile0(parse(src, "ascii"))
 
 
 def _program(rng):

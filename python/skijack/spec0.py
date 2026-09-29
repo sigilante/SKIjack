@@ -261,6 +261,8 @@ def compile0(program: A.Program) -> Dict[str, Term]:
     order: List[str] = []
     for d in program.decls:
         if isinstance(d, A.TypeDecl):
+            if d.name in types:
+                raise Subset0Error(f"type {d.name!r} declared twice")
             types[d.name] = d
             for i, c in enumerate(d.ctors):
                 ctors[c.name] = (d.name, i, len(c.fields))
@@ -271,6 +273,9 @@ def compile0(program: A.Program) -> Dict[str, Term]:
         else:
             defs.append(d)
             order.append(d.name)
+    for i, nm in enumerate(order):
+        if nm in order[:i]:
+            raise Subset0Error(f"{nm!r} declared twice")
     rules: Dict[str, Rule] = {}
 
     # the prelude: the Scott pair, list and numeral
@@ -349,16 +354,21 @@ def compile0(program: A.Program) -> Dict[str, Term]:
 
     # expansion: inline every reference, then abstract the formals
     memo: Dict[str, Term] = {}
+    making: set = set()
 
     def term_of(rule: str) -> Term:
         if rule == "\x00Y":
             return _Y
         if rule not in memo:
+            if rule in making:
+                raise Subset0Error(f"{rule!r} refers to itself outside a recursive equation")
+            making.add(rule)
             r = rules[rule]
             t = inline(r.body)
             for f in reversed(r.formals):
                 t = bracket_abstract("\x00v:" + f, t)
             memo[rule] = t
+            making.discard(rule)
         return memo[rule]
 
     def inline(t) -> Term:
