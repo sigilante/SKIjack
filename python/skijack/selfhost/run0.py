@@ -1,6 +1,6 @@
 """Running the SKIjack-0 front end in Avon, and checking it.
 
-    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges]
+    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates]
     python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
@@ -17,6 +17,10 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 - ``--random N``: N random programs of ``tests/test_spec0.py``'s kind;
 - ``--edges``: the programs of :data:`EDGES`, which the front end must
   accept or refuse as spec0 does.
+
+``--templates`` runs every check with Avon's supercombinator templates
+(``avon/docs/DESIGN.md`` §6.9): the front end's own, written beside its
+SKIT files, which Avon checks against the terms before it uses them.
 
 ``--profile`` runs the front end on FILE (default: its own source) with
 ``avon front0 --profile``, which charges each contraction to the named
@@ -279,7 +283,7 @@ EDGES: Dict[str, str] = {
 }
 
 
-def fixed_point(avon: str) -> Tuple[str, str, int]:
+def fixed_point(avon: str, extra: Tuple[str, ...] = ()) -> Tuple[str, str, int]:
     """What differs ('' if nothing), Avon's contractions, and the names."""
     text = FRONT.read_text()
     ref = reference(text)
@@ -290,7 +294,7 @@ def fixed_point(avon: str) -> Tuple[str, str, int]:
     differ = [n for n in ref if structural_hash(ref[n]) != structural_hash(e.terms[n])]
     if differ:
         return f"spec0 and the expander differ on the front end: {differ}", "", 0
-    steps, got, _err = run_avon(avon, text)
+    steps, got, _err = run_avon(avon, text, extra)
     return compare(got, ref), steps, len(ref)
 
 
@@ -301,6 +305,8 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20260928)
     ap.add_argument("--edges", action="store_true", help="check the edge programs")
     ap.add_argument("--no-fixed-point", action="store_true")
+    ap.add_argument("--templates", action="store_true",
+                    help="run with the front end's supercombinator templates")
     ap.add_argument("--profile", nargs="?", const="", metavar="FILE",
                     help="profile the front end on FILE (default: its own source)")
     a = ap.parse_args(argv)
@@ -312,9 +318,10 @@ def main(argv=None) -> int:
         print_profile(steps, rows)
         return 0
     fail = 0
+    extra: Tuple[str, ...] = (f"--templates={term_dir()}",) if a.templates else ()
     if a.edges:
         for what, text in EDGES.items():
-            why = compare(run_avon(a.avon, text)[1], reference(text))
+            why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why:
                 print(f"FAIL {what}: {why}")
                 fail += 1
@@ -325,7 +332,7 @@ def main(argv=None) -> int:
         rng, bad = random.Random(a.seed), 0
         for i in range(a.random):
             text = _program(rng)
-            why = compare(run_avon(a.avon, text)[1], reference(text))
+            why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why:
                 print(f"FAIL random program {i}: {why}\n{text}")
                 bad += 1
@@ -333,7 +340,7 @@ def main(argv=None) -> int:
         fail += bad
     if not a.no_fixed_point:
         t0 = time.time()
-        why, steps, n = fixed_point(a.avon)
+        why, steps, n = fixed_point(a.avon, extra)
         if why:
             print(f"FAIL fixed point: {why}")
             fail += 1
