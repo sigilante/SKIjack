@@ -582,8 +582,8 @@ def _mangle(name: str, used: Set[str]) -> str:
 # -------------------------------------------------------------- the driver
 
 def expand_program(program: A.Program, env: Optional[Environment] = None,
-                   generate_forms: bool = True, check: bool = True
-                   ) -> Expansion:
+                   generate_forms: bool = True, check: bool = True,
+                   inline: bool = False) -> Expansion:
     """Compile a program to closed ``{S,K,I}`` terms, one per name.
 
     With ``check`` (the default), Stage A runs first, over the *parsed*
@@ -593,6 +593,9 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     :func:`skijack.generate.generate` then adds the type-generated forms
     -- the walker, the rebuilder, the default ISA step equations and each
     interpreter core's ``step`` and fuel loop -- as surface declarations.
+    With ``inline``, :mod:`skijack.inline` unfolds small functions at their
+    calls first: different terms, denoting the same values; off by
+    default, so that the terms are what they always were.
     """
     if env is None:
         env = Environment()
@@ -809,12 +812,22 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
 
     cg = _Codegen(env, resolve, kinds=kinds)
 
-    # --- passes 1..3 on every equation body, then codegen
-    lowered: Dict[Tuple[Optional[str], str], A.Equation] = {}
+    # --- passes 1..3 on every equation body, then codegen; with ``inline``,
+    # small functions unfolded between macros and case lowering
+    expanded: Dict[Tuple[Optional[str], str], Tuple[Tuple[str, ...], A.Expr]] = {}
     for name, equation, core in equations:
-        body = expand_macros(equation.body, macros)
-        body = desugar(body, ctors, types)
-        lowered[(core, name)] = A.Equation(name, equation.binders, body)
+        expanded[(core, name)] = (equation.binders, expand_macros(equation.body, macros))
+    def_bodies = {d.name: expand_macros(d.expr, macros) for d in defs}
+    if inline:
+        from .inline import inline_bodies
+        top = {n: v for (c, n), v in expanded.items() if c is None}
+        new_eq, def_bodies = inline_bodies(top, def_bodies, ctors, substitute,
+                                           free_names, _fresh)
+        for eq_name, eq_body in new_eq.items():
+            expanded[(None, eq_name)] = (expanded[(None, eq_name)][0], eq_body)
+    lowered: Dict[Tuple[Optional[str], str], A.Equation] = {}
+    for (core, name), (binders, body) in expanded.items():
+        lowered[(core, name)] = A.Equation(name, binders, desugar(body, ctors, types))
 
     def _key_of(core: Optional[str], nm: str):
         """Which equation a name refers to from inside ``core``: a sibling
@@ -971,8 +984,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
 
     # --- plain definitions (``name := expr``)
     for d in defs:
-        body = expand_macros(d.expr, macros)
-        body = desugar(body, ctors, types)
+        body = desugar(def_bodies[d.name], ctors, types)
         term = cg.gen(body, [], backend[d.name])
         env.define_alias(backend[d.name], term)
 

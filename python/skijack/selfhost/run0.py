@@ -1,6 +1,6 @@
 """Running the SKIjack-0 front end in Avon, and checking it.
 
-    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data]]
+    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data]] [--inline]
     python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
@@ -23,6 +23,8 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 SKIT files, which Avon checks against the terms before it uses them.
 ``--data`` adds Avon's data jets (``avon/docs/DESIGN.md`` §6.10): with the
 templates, constructors dispatch natively and numerals are held as words.
+``--inline`` compiles the front end with skijack.inline (``RUNTIME-DESIGN.md``
+§10): other terms, whose output must still be Python's without it.
 
 ``--profile`` runs the front end on FILE (default: its own source) with
 ``avon front0 --profile``, which charges each contraction to the named
@@ -75,41 +77,44 @@ class Deep:
         sys.setrecursionlimit(self.old)
 
 
-@functools.lru_cache(maxsize=1)
-def expansion():
+@functools.lru_cache(maxsize=2)
+def expansion(inline: bool = False):
+    """The front end compiled; with ``inline``, by skijack.inline too."""
     with Deep():
-        return skijack.compile(FRONT.read_text(), lexicon="ascii")
+        return skijack.compile(FRONT.read_text(), lexicon="ascii", inline=inline)
 
 
 def compiled() -> Dict[str, Term]:
     return expansion().terms
 
 
-@functools.lru_cache(maxsize=1)
-def term_dir() -> pathlib.Path:
+@functools.lru_cache(maxsize=2)
+def term_dir(inline: bool = False) -> pathlib.Path:
     """A directory of the SKIT files avon front0 reads, and the front end's
     supercombinator templates (skijack.templates) for --templates."""
     d = pathlib.Path(tempfile.mkdtemp(prefix="front0-"))
-    t = compiled()
+    t = expansion(inline).terms
     for name in TERMS:
         (d / f"{name}.skit").write_bytes(jam(t[name]))
     with Deep():
-        write_templates(templates(expansion()), d / "templates.tsv",
+        write_templates(templates(expansion(inline)), d / "templates.tsv",
                         d / "template_terms.tsv")
-        write_words(expansion(), d / "words.tsv")   # none, unless it names one
+        write_words(expansion(inline), d / "words.tsv")   # none, unless it names one
     return d
 
 
 Result = Optional[List[Tuple[str, str]]]
 
 
-def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Result, str]:
+def run_avon(avon: str, text: str, extra: Tuple[str, ...] = (),
+             inline: bool = False) -> Tuple[str, Result, str]:
     """Avon's contraction count, every name and its term's hash (None if the
-    front end refused), and its stderr."""
+    front end refused), and its stderr; with ``inline``, the front end as
+    compiled by skijack.inline."""
     with tempfile.NamedTemporaryFile("w", suffix=".ski", delete=False) as f:
         f.write(text)
     try:
-        p = subprocess.run([avon, "front0", *extra, str(term_dir()), f.name],
+        p = subprocess.run([avon, "front0", *extra, str(term_dir(inline)), f.name],
                            capture_output=True, text=True)
     finally:
         pathlib.Path(f.name).unlink()
@@ -286,7 +291,8 @@ EDGES: Dict[str, str] = {
 }
 
 
-def fixed_point(avon: str, extra: Tuple[str, ...] = ()) -> Tuple[str, str, int]:
+def fixed_point(avon: str, extra: Tuple[str, ...] = (),
+                inline: bool = False) -> Tuple[str, str, int]:
     """What differs ('' if nothing), Avon's contractions, and the names."""
     text = FRONT.read_text()
     ref = reference(text)
@@ -297,7 +303,7 @@ def fixed_point(avon: str, extra: Tuple[str, ...] = ()) -> Tuple[str, str, int]:
     differ = [n for n in ref if structural_hash(ref[n]) != structural_hash(e.terms[n])]
     if differ:
         return f"spec0 and the expander differ on the front end: {differ}", "", 0
-    steps, got, _err = run_avon(avon, text, extra)
+    steps, got, _err = run_avon(avon, text, extra, inline)
     return compare(got, ref), steps, len(ref)
 
 
@@ -312,6 +318,9 @@ def main(argv=None) -> int:
                     help="run with the front end's supercombinator templates")
     ap.add_argument("--data", action="store_true",
                     help="with --templates, Avon's data jets as well")
+    ap.add_argument("--inline", action="store_true",
+                    help="the front end compiled with skijack.inline; its output "
+                         "must still be Python's, which is compiled without")
     ap.add_argument("--profile", nargs="?", const="", metavar="FILE",
                     help="profile the front end on FILE (default: its own source)")
     a = ap.parse_args(argv)
@@ -325,12 +334,12 @@ def main(argv=None) -> int:
     fail = 0
     if a.data and not a.templates:
         ap.error("--data needs --templates")
-    extra: Tuple[str, ...] = (f"--templates={term_dir()}",) if a.templates else ()
+    extra: Tuple[str, ...] = (f"--templates={term_dir(a.inline)}",) if a.templates else ()
     if a.data:
         extra += ("--data",)
     if a.edges:
         for what, text in EDGES.items():
-            why = compare(run_avon(a.avon, text, extra)[1], reference(text))
+            why = compare(run_avon(a.avon, text, extra, a.inline)[1], reference(text))
             if why:
                 print(f"FAIL {what}: {why}")
                 fail += 1
@@ -341,7 +350,7 @@ def main(argv=None) -> int:
         rng, bad = random.Random(a.seed), 0
         for i in range(a.random):
             text = _program(rng)
-            why = compare(run_avon(a.avon, text, extra)[1], reference(text))
+            why = compare(run_avon(a.avon, text, extra, a.inline)[1], reference(text))
             if why:
                 print(f"FAIL random program {i}: {why}\n{text}")
                 bad += 1
@@ -349,7 +358,7 @@ def main(argv=None) -> int:
         fail += bad
     if not a.no_fixed_point:
         t0 = time.time()
-        why, steps, n = fixed_point(a.avon, extra)
+        why, steps, n = fixed_point(a.avon, extra, a.inline)
         if why:
             print(f"FAIL fixed point: {why}")
             fail += 1

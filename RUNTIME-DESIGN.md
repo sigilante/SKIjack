@@ -369,3 +369,37 @@ numbers and run these natively on them, after checking each term against
 its hash and running it on small numerals. An operation another needs is
 listed with it: `natMul` adds with `natAdd`. A program's own `natAdd` is
 its code and is never listed.
+
+## 10. Inlining: fewer calls, the same values
+
+**An optional pass unfolds small functions where they are called.**
+`skijack.compile(..., inline=True)`, or `python3 -m skijack --inline`,
+runs `skijack/inline.py` between macro expansion and case lowering. A call
+to a top-level function that is not recursive, takes at least one
+argument, and has a body of at most twelve nodes becomes that body with
+the arguments in place; a case on a constructor written out takes its
+branch; a case of a case pushes small alternatives into the inner
+branches. `and (implies x y) r` becomes a case on `x`, and in its `True`
+branch a case on `y`: two dispatches where there were two calls, two
+dispatches and a boolean built and taken apart.
+
+- **The values are the same.** Each rewrite is an equation of the lambda
+  calculus. Compiled with the pass, the SKIjack-0 front end changes 134 of
+  its 492 terms and still compiles its own source, the 67 edge programs
+  and random ones exactly as Python does without it
+  (`tests/test_inline.py`; `run0 --inline`, with and without Avon's
+  templates).
+- **No work is copied.** An argument replaces a parameter only if it is a
+  bare name, or the parameter is used at most once and not under a
+  lambda, a case's branches counting as one use. Constants are never
+  unfolded. A rewrite that a local binder would capture is left out, and
+  so is anything near a quotation, a scry or a namespace literal, and the
+  equations of cores.
+- **It is off by default.** The terms change, so a program compiled
+  without it is byte for byte what it was, and every export with it.
+- **It pays under templates, not as pure SKI.** A larger body is more
+  S/K plumbing: the front end as pure SKI takes 369 million contractions
+  inlined against 307 million, and with Avon's templates and data jets
+  14.4 million against 17.4 million. The Reduceron's compiler inlines
+  for the same reason (its Table 3); `avon/docs/BENCHMARK.md` has the
+  measurements.
