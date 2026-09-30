@@ -1,6 +1,6 @@
 """Running the SKIjack-0 front end in Avon, and checking it.
 
-    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data]] [--inline]
+    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data] [--fix]] [--inline]
     python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
@@ -23,6 +23,7 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 SKIT files, which Avon checks against the terms before it uses them.
 ``--data`` adds Avon's data jets (``avon/docs/DESIGN.md`` §6.10): with the
 templates, constructors dispatch natively and numerals are held as words.
+``--fix`` adds Avon's one-step unfolding of Y (``avon/docs/DESIGN.md`` §6.11).
 ``--inline`` compiles the front end with skijack.inline (``RUNTIME-DESIGN.md``
 §10): other terms, whose output must still be Python's without it.
 
@@ -318,6 +319,8 @@ def main(argv=None) -> int:
                     help="run with the front end's supercombinator templates")
     ap.add_argument("--data", action="store_true",
                     help="with --templates, Avon's data jets as well")
+    ap.add_argument("--fix", action="store_true",
+                    help="with --templates, Avon's one-step unfolding of Y as well")
     ap.add_argument("--inline", action="store_true",
                     help="the front end compiled with skijack.inline; its output "
                          "must still be Python's, which is compiled without")
@@ -332,11 +335,13 @@ def main(argv=None) -> int:
         print_profile(steps, rows)
         return 0
     fail = 0
-    if a.data and not a.templates:
-        ap.error("--data needs --templates")
+    if (a.data or a.fix) and not a.templates:
+        ap.error("--data and --fix need --templates")
     extra: Tuple[str, ...] = (f"--templates={term_dir(a.inline)}",) if a.templates else ()
     if a.data:
         extra += ("--data",)
+    if a.fix:
+        extra += ("--fix",)
     if a.edges:
         for what, text in EDGES.items():
             why = compare(run_avon(a.avon, text, extra, a.inline)[1], reference(text))
