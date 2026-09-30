@@ -405,6 +405,7 @@ def namespaces(outdir: pathlib.Path) -> List[str]:
     from . import run as R
     exp = expand_program(parse(corpus.read("scry-block", "ascii"), "ascii"))
     at = exp.answer_type
+    assert at is not None               # scry-block declares its answer type
     shared = {"eq": exp.terms["EQ5"], "hit": exp.terms[at.hit.name],
               "notyet": exp.terms[at.notyet.name]}
     for key, term in shared.items():

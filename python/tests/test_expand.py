@@ -182,14 +182,55 @@ def test_unresolved_name_is_an_error():
         expand_program(parse_ascii("f x = x nowhere\n"))
 
 
-def test_mutual_recursion_is_refused_explicitly():
-    with pytest.raises(ExpandError, match="mutually recursive"):
-        expand_program(parse_ascii(
-            "nat === Zero | Suc nat\n"
-            "c := {\n"
-            "  ev n = n |> { Zero Zero ; Suc m od m }\n"
-            "  od n = n |> { Zero Zero ; Suc m ev m }\n"
-            "}\n"))
+def _yes_no(term):
+    from aviary_kernel.terms import App, Atom
+    from skijack.run import run_level0
+    return run_level0(App(App(term, Atom("yes")), Atom("no")), 200_000).term.name
+
+
+def test_mutual_recursion_ties_one_fixpoint_per_group():
+    """A group of mutually recursive equations is one fixpoint: its
+    generator returns the tuple of the members' codes, each taking the
+    group, and a member is its projection."""
+    from skijack.probe import Prober
+    e = expand_program(parse_ascii(
+        "nat  === Zero | Suc nat\n"
+        "bool === Yes | No\n"
+        "even n = n |> { Zero Yes ; Suc k (odd k) }\n"
+        "odd  n = n |> { Zero No ; Suc k (even k) }\n"
+        "a3 n = n |> { Zero Zero ; Suc k (Suc (b3 k)) }\n"
+        "b3 n = n |> { Zero Zero ; Suc k (c3 k) }\n"
+        "c3 n = n |> { Zero Zero ; Suc k (a3 k) }\n"))
+    pr = Prober(e)
+    from aviary_kernel.terms import App
+    for k in range(7):
+        assert _yes_no(App(e.terms["even"], pr.nat(k))) == ("yes" if k % 2 == 0 else "no")
+        assert _yes_no(App(e.terms["odd"], pr.nat(k))) == ("no" if k % 2 == 0 else "yes")
+        assert pr.read_nat(App(e.terms["a3"], pr.nat(k))) == (k + 2) // 3
+
+
+def test_mutual_recursion_inside_a_core():
+    from skijack.probe import Prober
+    from aviary_kernel.terms import App
+    e = expand_program(parse_ascii(
+        "nat === Zero | Suc nat\n"
+        "bool === Yes | No\n"
+        "c := {\n"
+        "  ev n = n |> { Zero Yes ; Suc m (od m) }\n"
+        "  od n = n |> { Zero No ; Suc m (ev m) }\n"
+        "}\n"))
+    pr = Prober(e)
+    assert [_yes_no(App(e.terms["c.ev"], pr.nat(k))) for k in range(4)] == ["yes", "no", "yes", "no"]
+
+
+def test_a_self_recursive_equation_is_compiled_as_before():
+    """A group of one keeps its own fixpoint, Y nameGen: no term the
+    corpus compiled before changes (the conformance export is compared
+    byte for byte)."""
+    e = expand_program(parse_ascii(
+        "nat === Zero | Suc nat\n"
+        "add m n = n |> { Zero m ; Suc k (Suc (add m k)) }\n"))
+    assert e.sizes["add"] == 42
 
 
 def test_quotation_without_an_object_type_is_refused():

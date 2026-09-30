@@ -51,6 +51,7 @@ include = ["skijack*"]
 # the conformance corpus is shipped: it is the specification's examples,
 # and a second implementation is correct when it reproduces them
 "skijack.corpus" = ["*.ski"]
+"skijack.selfhost" = ["*.ski"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
