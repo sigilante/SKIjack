@@ -1,6 +1,6 @@
 """Running the SKIjack-0 front end in Avon, and checking it.
 
-    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates]
+    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data]]
     python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
@@ -21,6 +21,8 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 ``--templates`` runs every check with Avon's supercombinator templates
 (``avon/docs/DESIGN.md`` §6.9): the front end's own, written beside its
 SKIT files, which Avon checks against the terms before it uses them.
+``--data`` adds Avon's data jets (``avon/docs/DESIGN.md`` §6.10): with the
+templates, constructors dispatch natively and numerals are held as words.
 
 ``--profile`` runs the front end on FILE (default: its own source) with
 ``avon front0 --profile``, which charges each contraction to the named
@@ -53,7 +55,7 @@ from skijack.errors import SkijackError
 from skijack.export import jam
 from skijack.parser import parse
 from skijack.spec0 import Subset0Error, compile0, in_subset
-from skijack.templates import templates, write as write_templates
+from skijack.templates import templates, write as write_templates, write_words
 
 HERE = pathlib.Path(__file__).resolve().parent
 FRONT = HERE / "front0.ascii.ski"
@@ -94,6 +96,7 @@ def term_dir() -> pathlib.Path:
     with Deep():
         write_templates(templates(expansion()), d / "templates.tsv",
                         d / "template_terms.tsv")
+        write_words(expansion(), d / "words.tsv")   # none, unless it names one
     return d
 
 
@@ -307,6 +310,8 @@ def main(argv=None) -> int:
     ap.add_argument("--no-fixed-point", action="store_true")
     ap.add_argument("--templates", action="store_true",
                     help="run with the front end's supercombinator templates")
+    ap.add_argument("--data", action="store_true",
+                    help="with --templates, Avon's data jets as well")
     ap.add_argument("--profile", nargs="?", const="", metavar="FILE",
                     help="profile the front end on FILE (default: its own source)")
     a = ap.parse_args(argv)
@@ -318,7 +323,11 @@ def main(argv=None) -> int:
         print_profile(steps, rows)
         return 0
     fail = 0
+    if a.data and not a.templates:
+        ap.error("--data needs --templates")
     extra: Tuple[str, ...] = (f"--templates={term_dir()}",) if a.templates else ()
+    if a.data:
+        extra += ("--data",)
     if a.edges:
         for what, text in EDGES.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))

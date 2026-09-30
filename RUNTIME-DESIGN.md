@@ -359,3 +359,13 @@ body, keyed by the §5 hash of the SKI term it compiles to
 On the 17 compilable corpus programs, 744 rules give 736 templates, the
 other 8 being η-templates, and every one abstracts back to its term; the
 SKIjack-0 front end gives 993, each one of spec0's rules.
+
+**Numeral operations are named by their terms.** A program that names the
+prelude's `natAdd`, `natSub`, `natMul`, `natIfEq` or `natIfLe` (`SPEC.md`
+§4) gets `words.tsv` beside its templates (`templates.write_words`): each
+operation's §5 hash, its name (`add`, `sub`, `mul`, `ifeq`, `ifle`) and
+its term. Avon's data jets (`avon/docs/DESIGN.md` §6.10) hold numerals as
+numbers and run these natively on them, after checking each term against
+its hash and running it on small numerals. An operation another needs is
+listed with it: `natMul` adds with `natAdd`. A program's own `natAdd` is
+its code and is never listed.

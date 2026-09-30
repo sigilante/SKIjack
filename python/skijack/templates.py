@@ -52,7 +52,7 @@ from aviary_kernel.terms import App, Atom, Term, pretty
 from .dictionary import structural_hash
 
 __all__ = ["Var", "Ref", "Template", "templates", "check", "write",
-           "body_text", "is_eta"]
+           "write_words", "WORD_OPS", "body_text", "is_eta"]
 
 _SKI = ("S", "K", "I")
 
@@ -241,6 +241,30 @@ def write(ts: List[Template], templates_path, terms_path) -> Tuple[int, int]:
         rows.append(f"{h}\t{_atoms(term)}\t{pretty(term)}\n")
     terms_path.write_text("".join(rows))
     return len(lines), len(rows)
+
+
+#: the numeral operations Avon runs on words, by the name ``words.tsv`` gives
+WORD_OPS = {"natAdd": "add", "natSub": "sub", "natMul": "mul",
+            "natIfEq": "ifeq", "natIfLe": "ifle"}
+
+
+def write_words(exp, path) -> int:
+    """Write ``words.tsv``: ``hash op atoms printed-term`` for each numeral
+    operation (``expand.NAT_NAMES``) the expansion defines, in the order
+    of :data:`WORD_OPS`.  Avon checks each term against its hash and admits
+    the operation only after running it on small numerals; none is
+    written, and no file, when the program names none.  The line count."""
+    env = exp.env
+    rows = []
+    for name, op in WORD_OPS.items():
+        # the prelude's operation only: a program's own natAdd is its code
+        if exp.rule_kinds.get(name) != ("prelude", name):
+            continue
+        t = ski_expand(Atom(name), env)
+        rows.append(f"{structural_hash(t)}\t{op}\t{_atoms(t)}\t{pretty(t)}\n")
+    if rows:
+        path.write_text("".join(rows))
+    return len(rows)
 
 
 def _atoms(t: Term) -> int:

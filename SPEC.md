@@ -212,6 +212,16 @@ type variables and type applications are not spellable in one
   application tree is code and cannot be addressed.
 - **The prelude** is `pair`, `hd`, `tl`, `nil`, `cons`, `zero`, `suc`.
   A program that defines one of these replaces the prelude's.
+- **Numeral operations** join the prelude only in a program that names
+  one without defining it (`expand.NAT_NAMES`), so no other program's
+  terms change: `natAdd`, `natSub` (truncated at zero) and `natMul` on
+  Scott numerals of any type declared `Zero | Suc t`, and the tests
+  `natIfEq m n x y` and `natIfLe m n x y`, which are `x` when `m = n`
+  (`m <= n`) and `y` otherwise, so that no boolean type is assumed. Each
+  is `Y` of a generator over the numerals' cases, as the expander ties
+  any recursion (`test_nat`). `natMul` is defined by `natAdd`, so naming
+  `natMul` installs `natAdd` too. A runtime may run them natively on numerals
+  it holds as numbers (§9 of `RUNTIME-DESIGN.md`).
 - **Booleans** are `K` for yes and `K I` for no.
 - **Numerals** are Scott numerals; there is no integer type. Fuel `@n`
   is the one place the token table supplies a numeral; an inner numeral
@@ -483,7 +493,10 @@ error (`test_types::test_a_function_is_not_a_datum`).
   <t>@n` applies the interpreter's loop to its parameters, then to
   `fuel` and the datum, and has the result type `R`.
 - **The prelude and the ISA** have schemes: `pair : a -> b -> cell a b`,
-  `hd`, `tl`, `nil : list a`, `cons`, `zero : fuel`, `suc`; `S`, `K`,
+  `hd`, `tl`, `nil : list a`, `cons`, `zero : fuel`, `suc`;
+  `natAdd`, `natSub`, `natMul : a -> a -> a` and `natIfEq`,
+  `natIfLe : a -> a -> b -> b -> b`, which serve any numeral type, so
+  their operands are only tied to one type; `S`, `K`,
   `I`, `B`, `C`, `W`, `Y` their standard ones. An axis pick projects
   through nested cells and nothing else
   (`test_types::test_an_axis_picks_into_a_cell_and_nothing_else`).

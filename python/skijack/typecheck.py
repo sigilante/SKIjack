@@ -408,6 +408,15 @@ class _Types:
             return Scheme((), (), FUEL)
         if name == "suc":
             return Scheme((), (), TArrow(FUEL, FUEL))
+        # the numeral operations (expand.NAT_NAMES) serve any type declared
+        # as `Zero | Suc t`, whatever its name, so here they only tie their
+        # operands, and a test's two outcomes, to one type each
+        if name in ("natAdd", "natSub", "natMul"):
+            a = v()
+            return self.close(_arrows([a, a], a))
+        if name in ("natIfEq", "natIfLe"):
+            a, b = v(), v()
+            return self.close(_arrows([a, a, b, b], b))
         return None
 
     # ---- inference over macro-expanded bodies
