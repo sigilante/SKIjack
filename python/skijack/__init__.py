@@ -27,15 +27,17 @@ from .dictionary import (Dictionary, Entry, from_expansion, lift, lower,
 
 
 def compile(source: str, lexicon: str = "ascii", *, check: bool = True,
-            generate_forms: bool = True) -> Expansion:
+            generate_forms: bool = True, inline: bool = False) -> Expansion:
     """Source text -> a compiled program.
 
     Parse, then Stage A (``check``), then the type-generated forms
     (``generate_forms``), then expansion.  Checking can only reject, so
     the terms are the same either way (``DESIDERATA.md`` item 11).
+    ``inline`` unfolds small functions at their calls (:mod:`skijack.inline`):
+    other terms, the same values; off by default.
     """
     return expand_program(parse(source, lexicon), check=check,
-                          generate_forms=generate_forms)
+                          generate_forms=generate_forms, inline=inline)
 
 
 #: ``compile`` shadows the builtin inside this module's namespace only;

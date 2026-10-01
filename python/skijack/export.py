@@ -50,6 +50,11 @@ It also writes the corpus's dictionary (``skijack.dictionary``), the table
 Avon's jets key on (``avon/DESIGN.md`` §5, §6): ``dictionary.tsv``, one
 line per distinct term, ``hash  atoms  printed-term``, and
 ``dictionary_names.tsv``, one line per name, ``program  name  hash``.
+And the corpus's supercombinator templates (``skijack.templates``):
+``templates.tsv``, each rule's formals and open body keyed by its term's
+hash, and ``template_terms.tsv``, the closed terms the bodies reference,
+in ``dictionary.tsv``'s format.  Both are hints beside the terms, which
+they leave unchanged.
 
 The manifest's columns, tab-separated:
 
@@ -190,6 +195,24 @@ def dictionary():
             rows.setdefault(e.hash, (e.size, pretty(e.term)))
             names.append((stem, name, e.hash))
     return rows, names
+
+
+def corpus_templates():
+    """Every compilable corpus program's templates (skijack.templates), the
+    first of each key kept, in corpus order."""
+    from .templates import templates
+    out, seen = [], set()
+    stems = sorted({p.name.split(".")[0] for p in corpus.DIR.glob("*.ascii.ski")})
+    for stem in stems:
+        try:
+            exp = expand_program(parse(corpus.read(stem, "ascii"), "ascii"))
+        except Exception:                       # Stage A refusals
+            continue
+        for t in templates(exp):
+            if t.key_hash not in seen:
+                seen.add(t.key_hash)
+                out.append(t)
+    return out
 
 
 def _whnf(term, steps=20000):
@@ -474,6 +497,9 @@ def export(outdir: pathlib.Path) -> int:
         f"{h}\t{size}\t{text}\n" for h, (size, text) in sorted(rows.items())))
     (outdir / "dictionary_names.tsv").write_text("".join(
         f"{stem}\t{name}\t{h}\n" for stem, name, h in names))
+    from .templates import write as write_templates
+    write_templates(corpus_templates(), outdir / "templates.tsv",
+                    outdir / "template_terms.tsv")
     return len(lines)
 
 

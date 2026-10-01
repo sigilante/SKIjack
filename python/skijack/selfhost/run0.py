@@ -1,15 +1,14 @@
-"""Running the SKIjack-0 front end in a reducer, and checking it.
+"""Running the SKIjack-0 front end in Avon, and checking it.
 
-    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges]
+    python3 -m skijack.selfhost.run0 --avon PATH [--random N] [--edges] [--templates [--data] [--fix]] [--inline]
     python3 -m skijack.selfhost.run0 --avon PATH --profile [FILE]
 
 The front end (``front0.ascii.ski``) is a term: applied to a program's
 characters, it reduces to every name's closed term.  This module compiles
-it with this package, hands ``render markers (front text)`` to a reducer
-that shares -- Avon's ``reduce --strategy=share`` -- in the printed form,
-and reads the printed normal form back into terms.  ``render``
-(``render0.ascii.ski``) turns the result into a tree of marker atoms, so
-the normal form is the result written out.
+it with this package and writes it, with the constructors that build its
+input, as SKIT files; ``avon front0`` builds the input, reduces in share
+mode, and reads the result by probing into a line per name, the name and
+its term's §5 hash.
 
 The checks, each against ``skijack.spec0`` and so against the expander:
 
@@ -19,9 +18,18 @@ The checks, each against ``skijack.spec0`` and so against the expander:
 - ``--edges``: the programs of :data:`EDGES`, which the front end must
   accept or refuse as spec0 does.
 
+``--templates`` runs every check with Avon's supercombinator templates
+(``avon/docs/DESIGN.md`` §6.9): the front end's own, written beside its
+SKIT files, which Avon checks against the terms before it uses them.
+``--data`` adds Avon's data jets (``avon/docs/DESIGN.md`` §6.10): with the
+templates, constructors dispatch natively and numerals are held as words.
+``--fix`` adds Avon's one-step unfolding of Y (``avon/docs/DESIGN.md`` §6.11).
+``--inline`` compiles the front end with skijack.inline (``RUNTIME-DESIGN.md``
+§10): other terms, whose output must still be Python's without it.
+
 ``--profile`` runs the front end on FILE (default: its own source) with
-Avon's ``--profile``, which charges each contraction to the named term
-whose code it runs, and totals the rows by equation: a lifted lambda
+``avon front0 --profile``, which charges each contraction to the named
+term whose code it runs, and totals the rows by equation: a lifted lambda
 (``f~lambda2``) and a recursion's body (``f.body``) count as ``f``.
 
 A call of the non-sharing reference reducer would recompute every shared
@@ -42,25 +50,25 @@ import tempfile
 import time
 from typing import Dict, List, Optional, Tuple
 
-from aviary_kernel.terms import App, Atom, Term
+from aviary_kernel.terms import App, Term
 
 import skijack
 from skijack.dictionary import structural_hash
 from skijack.errors import SkijackError
+from skijack.export import jam
 from skijack.parser import parse
 from skijack.spec0 import Subset0Error, compile0, in_subset
+from skijack.templates import templates, write as write_templates, write_words
 
 HERE = pathlib.Path(__file__).resolve().parent
 FRONT = HERE / "front0.ascii.ski"
-RENDER = HERE / "render0.ascii.ski"
 
-#: the marker atoms, in the order of render0.ascii.ski's cell
-MARKS = ["cd", "hi", "lo", "nn", "nc", "zz", "su", "ts", "tk", "ti", "tv", "ta",
-         "on", "oc", "ok", "er"]
+#: the terms avon front0 reads, as DIR/<name>.skit
+TERMS = ("front", "SCons", "SNil", "Code", "Lo", "Hi")
 
 
 class Deep:
-    """The expander and the decoder recurse on term depth."""
+    """The expander recurses on term depth."""
 
     def __enter__(self):
         self.old = sys.getrecursionlimit()
@@ -70,97 +78,54 @@ class Deep:
         sys.setrecursionlimit(self.old)
 
 
-@functools.lru_cache(maxsize=1)
+@functools.lru_cache(maxsize=2)
+def expansion(inline: bool = False):
+    """The front end compiled; with ``inline``, by skijack.inline too."""
+    with Deep():
+        return skijack.compile(FRONT.read_text(), lexicon="ascii", inline=inline)
+
+
 def compiled() -> Dict[str, Term]:
-    """front0 with the renderer appended.  The markers `render` applies are
-    atoms, not data, which the type checker refuses, so this compiles
-    unchecked; :func:`check_front_term` shows `front` is the checked
-    compile's."""
+    return expansion().terms
+
+
+@functools.lru_cache(maxsize=2)
+def term_dir(inline: bool = False) -> pathlib.Path:
+    """A directory of the SKIT files avon front0 reads, and the front end's
+    supercombinator templates (skijack.templates) for --templates."""
+    d = pathlib.Path(tempfile.mkdtemp(prefix="front0-"))
+    t = expansion(inline).terms
+    for name in TERMS:
+        (d / f"{name}.skit").write_bytes(jam(t[name]))
     with Deep():
-        src = FRONT.read_text() + RENDER.read_text()
-        return skijack.compile(src, lexicon="ascii", check=False).terms
+        write_templates(templates(expansion(inline)), d / "templates.tsv",
+                        d / "template_terms.tsv")
+        write_words(expansion(inline), d / "words.tsv")   # none, unless it names one
+    return d
 
 
-def check_front_term() -> None:
-    with Deep():
-        checked = skijack.compile(FRONT.read_text(), lexicon="ascii").terms["front"]
-    if structural_hash(checked) != structural_hash(compiled()["front"]):
-        raise AssertionError("appending the renderer changed the front end's term")
+Result = Optional[List[Tuple[str, str]]]
 
 
-def encode(text: str) -> Term:
-    """A program as the front end reads it: a list of 7-bit codes."""
-    t = compiled()
-    codes = {}
-    out = t["SNil"]
-    for ch in reversed(text):
-        n = ord(ch)
-        if n > 127:
-            raise ValueError(f"not ASCII: {ch!r}")
-        if n not in codes:
-            c = t["Code"]
-            for i in range(7):
-                c = App(c, t["Hi" if (n >> (6 - i)) & 1 else "Lo"])
-            codes[n] = c
-        out = App(App(t["SCons"], codes[n]), out)
-    return out
-
-
-def cell(xs: List[Term]) -> Term:
-    t = compiled()
-    out = xs[-1]
-    for x in reversed(xs[:-1]):
-        out = App(App(t["pair"], x), out)
-    return out
-
-
-def printed(term: Term) -> str:
-    """The printed form, `f a b` with parenthesized arguments, without
-    recursion."""
-    out: List[str] = []
-    stack: list = [term]
-    while stack:
-        x = stack.pop()
-        if isinstance(x, str):
-            out.append(x)
-        elif isinstance(x, Atom):
-            out.append(x.name)
-        else:
-            args = []
-            while isinstance(x, App):
-                args.append(x.arg)
-                x = x.fn
-            stack.append(")")
-            for a in args:                      # the last argument first
-                stack.append(a)
-                stack.append(" ")
-            stack.append(x)
-            stack.append("(")
-    return "".join(out)
-
-
-def job(text: str) -> str:
-    """The term a reducer normalizes: `render markers (front text)`."""
-    t = compiled()
-    return printed(App(App(t["render"], cell([Atom(m) for m in MARKS])),
-                       App(t["front"], encode(text))))
-
-
-def run_avon(avon: str, text: str, fuel: int = 10 ** 12,
-             extra: Tuple[str, ...] = ()) -> Tuple[str, str]:
-    """Avon's status line and printed normal form."""
-    status, body, _ = _avon(avon, text, fuel, extra)
-    return status, body
-
-
-def _avon(avon: str, text: str, fuel: int, extra: Tuple[str, ...]) -> Tuple[str, str, str]:
-    p = subprocess.run([avon, "reduce", "--strategy=share", f"--fuel={fuel}",
-                        "--budget=200000000", "--max-nodes=1000000000", *extra],
-                       input=job(text), capture_output=True, text=True)
-    if p.returncode not in (0, 1) or not p.stdout:
-        raise RuntimeError(f"avon failed: {p.stderr.strip()[:400]}")
-    status, _, body = p.stdout.partition("\n")
-    return status, body, p.stderr
+def run_avon(avon: str, text: str, extra: Tuple[str, ...] = (),
+             inline: bool = False) -> Tuple[str, Result, str]:
+    """Avon's contraction count, every name and its term's hash (None if the
+    front end refused), and its stderr; with ``inline``, the front end as
+    compiled by skijack.inline."""
+    with tempfile.NamedTemporaryFile("w", suffix=".ski", delete=False) as f:
+        f.write(text)
+    try:
+        p = subprocess.run([avon, "front0", *extra, str(term_dir(inline)), f.name],
+                           capture_output=True, text=True)
+    finally:
+        pathlib.Path(f.name).unlink()
+    m = re.search(r"^contractions (\d+)$", p.stderr, re.M)
+    if p.returncode != 0 or not m:
+        raise RuntimeError(f"avon front0 failed: {p.stderr.strip()[:400]}")
+    if p.stdout.strip() == "RErr":
+        return m.group(1), None, p.stderr
+    rows = [tuple(line.split("\t")) for line in p.stdout.splitlines()]
+    return m.group(1), [(n, h) for n, h in rows], p.stderr
 
 
 # -------------------------------------------------------------- profile
@@ -182,15 +147,11 @@ MIN_ATOMS = 6
 
 
 def names_file(path: pathlib.Path) -> int:
-    """Every rule of the front end and the renderer of MIN_ATOMS atoms or
-    more, labelled, as `rule TAB label TAB hash` lines for Avon's
-    --profile."""
+    """Every rule of the front end of MIN_ATOMS atoms or more, labelled, as
+    `rule TAB label TAB hash` lines for Avon's --profile."""
     with Deep():
         internals: Dict[str, Term] = {}
         compile0(parse(FRONT.read_text(), "ascii"), internals)
-        t = compiled()
-        for n in ("render", "rOuts", "rTm", "rNat", "rName", "rCode", "rBit"):
-            internals[n] = t[n]
         lines = [f"rule\t{k}\t{structural_hash(v)}" for k, v in internals.items()
                  if _atoms(v) >= MIN_ATOMS]
     path.write_text("\n".join(lines) + "\n")
@@ -204,102 +165,28 @@ def equation_of(label: str) -> str:
 
 
 def profile(avon: str, text: str, names: pathlib.Path) -> Tuple[str, List[Tuple[int, str]]]:
-    """Avon's status, and its profile rows: contractions and label."""
-    status, _body, err = _avon(avon, text, 10 ** 12, (f"--profile={names}",))
+    """Avon's contractions, and its profile rows: contractions and label."""
+    steps, _got, err = run_avon(avon, text, (f"--profile={names}",))
     rows = []
     for line in err.splitlines():
         m = re.match(r"\s*(\d+)\s+[\d.]+\s+(.*)$", line)
         if m:
             rows.append((int(m.group(1)), m.group(2)))
-    return status, rows
+    return steps, rows
 
 
-def print_profile(status: str, rows: List[Tuple[int, str]], top: int = 40) -> None:
+def print_profile(steps: str, rows: List[Tuple[int, str]], top: int = 40) -> None:
     total = sum(c for c, _ in rows)
     by_eq: Dict[str, int] = {}
     for c, label in rows:
         by_eq[equation_of(label)] = by_eq.get(equation_of(label), 0) + c
-    print(f"{status}; {total:,} contractions charged")
+    print(f"{int(steps):,} contractions; {total:,} charged")
     print("\nby equation (its lambdas and recursion body included):")
     for eq, c in sorted(by_eq.items(), key=lambda kv: -kv[1])[:top]:
         print(f"{c:>15,} {100 * c / total:6.2f}%  {eq}")
     print("\nby rule:")
     for c, label in rows[:top]:
         print(f"{c:>15,} {100 * c / total:6.2f}%  {label}")
-
-
-# ------------------------------------------------------------- decoding
-
-def _tree(s: str):
-    """The printed form to nested lists: an application is [head, args...]."""
-    stack: list = [[]]
-    for tok in s.replace("(", " ( ").replace(")", " ) ").split():
-        if tok == "(":
-            stack.append([])
-        elif tok == ")":
-            x = stack.pop()
-            stack[-1].append(x[0] if len(x) == 1 else x)
-        else:
-            stack[-1].append(tok)
-    top = stack[0]
-    return top[0] if len(top) == 1 else top
-
-
-def _split(x):
-    return (x, []) if isinstance(x, str) else (x[0], x[1:])
-
-
-def _name(x) -> str:
-    out: List[str] = []
-    while True:
-        h, a = _split(x)
-        if h == "nn":
-            return "".join(out)
-        if h != "nc":
-            raise ValueError(f"not a name: {h}")
-        cd, bits = _split(a[0])
-        if cd != "cd" or len(bits) != 7:
-            raise ValueError("not a code")
-        out.append(chr(int("".join("1" if b == "hi" else "0" for b in bits), 2)))
-        x = a[1]
-
-
-def _term(x) -> Term:
-    out: list = []
-    stack = [x]
-    while stack:
-        y = stack.pop()
-        if y is None:                           # an application's two parts are done
-            f_arg = out.pop()
-            out.append(App(out.pop(), f_arg))
-            continue
-        h, a = _split(y)
-        if h in ("ts", "tk", "ti") and not a:
-            out.append(Atom(h[1].upper()))
-        elif h == "ta" and len(a) == 2:
-            stack.extend([None, a[1], a[0]])
-        else:
-            raise ValueError(f"not a closed term: {h}")
-    return out[0]
-
-
-def decode(status: str, body: str) -> Optional[List[Tuple[str, Term]]]:
-    """Every name and its term, or None if the front end refused."""
-    if not status.startswith("NORMAL"):
-        raise RuntimeError(f"the reducer stopped: {status}")
-    h, a = _split(_tree(body))
-    if h == "er" and not a:
-        return None
-    if h != "ok":
-        raise ValueError(f"not a result: {h}")
-    out: List[Tuple[str, Term]] = []
-    x = a[0]
-    while True:
-        h, a = _split(x)
-        if h == "on":
-            return out
-        out.append((_name(a[0]), _term(a[1])))
-        x = a[2]
 
 
 # --------------------------------------------------------------- checks
@@ -316,7 +203,7 @@ def reference(text: str) -> Optional[Dict[str, Term]]:
             return None
 
 
-def compare(got, ref) -> str:
+def compare(got: Result, ref: Optional[Dict[str, Term]]) -> str:
     """'' if the front end did what spec0 did, else what differs."""
     if got is None or ref is None:
         if got is None and ref is None:
@@ -324,7 +211,7 @@ def compare(got, ref) -> str:
         return f"spec0 {'refuses' if ref is None else 'accepts'}, the front end does not"
     if [n for n, _ in got] != list(ref):
         return f"names differ: {[n for n, _ in got][:8]}... against {list(ref)[:8]}..."
-    bad = [n for n, t in got if structural_hash(t) != structural_hash(ref[n])]
+    bad = [n for n, h in got if h != structural_hash(ref[n])]
     return f"terms differ: {bad}" if bad else ""
 
 
@@ -405,8 +292,9 @@ EDGES: Dict[str, str] = {
 }
 
 
-def fixed_point(avon: str) -> Tuple[str, str, int]:
-    """What differs ('' if nothing), Avon's status line, and the names."""
+def fixed_point(avon: str, extra: Tuple[str, ...] = (),
+                inline: bool = False) -> Tuple[str, str, int]:
+    """What differs ('' if nothing), Avon's contractions, and the names."""
     text = FRONT.read_text()
     ref = reference(text)
     if ref is None:
@@ -416,8 +304,8 @@ def fixed_point(avon: str) -> Tuple[str, str, int]:
     differ = [n for n in ref if structural_hash(ref[n]) != structural_hash(e.terms[n])]
     if differ:
         return f"spec0 and the expander differ on the front end: {differ}", "", 0
-    status, body = run_avon(avon, text)
-    return compare(decode(status, body), ref), status, len(ref)
+    steps, got, _err = run_avon(avon, text, extra, inline)
+    return compare(got, ref), steps, len(ref)
 
 
 def main(argv=None) -> int:
@@ -427,6 +315,15 @@ def main(argv=None) -> int:
     ap.add_argument("--seed", type=int, default=20260928)
     ap.add_argument("--edges", action="store_true", help="check the edge programs")
     ap.add_argument("--no-fixed-point", action="store_true")
+    ap.add_argument("--templates", action="store_true",
+                    help="run with the front end's supercombinator templates")
+    ap.add_argument("--data", action="store_true",
+                    help="with --templates, Avon's data jets as well")
+    ap.add_argument("--fix", action="store_true",
+                    help="with --templates, Avon's one-step unfolding of Y as well")
+    ap.add_argument("--inline", action="store_true",
+                    help="the front end compiled with skijack.inline; its output "
+                         "must still be Python's, which is compiled without")
     ap.add_argument("--profile", nargs="?", const="", metavar="FILE",
                     help="profile the front end on FILE (default: its own source)")
     a = ap.parse_args(argv)
@@ -434,14 +331,20 @@ def main(argv=None) -> int:
         text = pathlib.Path(a.profile).read_text() if a.profile else FRONT.read_text()
         names = pathlib.Path(tempfile.mkdtemp()) / "front0.names.tsv"
         names_file(names)
-        status, rows = profile(a.avon, text, names)
-        print_profile(status, rows)
+        steps, rows = profile(a.avon, text, names)
+        print_profile(steps, rows)
         return 0
     fail = 0
-    check_front_term()
+    if (a.data or a.fix) and not a.templates:
+        ap.error("--data and --fix need --templates")
+    extra: Tuple[str, ...] = (f"--templates={term_dir(a.inline)}",) if a.templates else ()
+    if a.data:
+        extra += ("--data",)
+    if a.fix:
+        extra += ("--fix",)
     if a.edges:
         for what, text in EDGES.items():
-            why = compare(decode(*run_avon(a.avon, text)), reference(text))
+            why = compare(run_avon(a.avon, text, extra, a.inline)[1], reference(text))
             if why:
                 print(f"FAIL {what}: {why}")
                 fail += 1
@@ -452,7 +355,7 @@ def main(argv=None) -> int:
         rng, bad = random.Random(a.seed), 0
         for i in range(a.random):
             text = _program(rng)
-            why = compare(decode(*run_avon(a.avon, text)), reference(text))
+            why = compare(run_avon(a.avon, text, extra, a.inline)[1], reference(text))
             if why:
                 print(f"FAIL random program {i}: {why}\n{text}")
                 bad += 1
@@ -460,13 +363,13 @@ def main(argv=None) -> int:
         fail += bad
     if not a.no_fixed_point:
         t0 = time.time()
-        why, status, n = fixed_point(a.avon)
+        why, steps, n = fixed_point(a.avon, extra, a.inline)
         if why:
             print(f"FAIL fixed point: {why}")
             fail += 1
         else:
             print(f"fixed point: the front end gives all {n} of its own names "
-                  f"their terms ({status}, {time.time() - t0:.0f}s)")
+                  f"their terms ({int(steps):,} contractions, {time.time() - t0:.0f}s)")
     return 1 if fail else 0
 
 

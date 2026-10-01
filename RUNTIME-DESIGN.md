@@ -332,3 +332,74 @@ parametric constructor jet over a jet per named supercombinator.
   37 → 398 → 7,492 atoms in 5, 20 and 60 steps with no normal form, so
   there is nothing for a jet to compute. Kept pending clarification of
   what it was meant to denote.
+
+## 9. Templates: the compiler's supercombinators, beside the terms
+
+**The expander hands the runtime the functions that bracket abstraction
+erases, and changes no term doing it.** Every rule with formals -- each
+equation, recursion body, group part, lifted lambda, constructor and
+prelude rule -- is also written as a template: its formals and its open
+body, keyed by the §5 hash of the SKI term it compiles to
+(`skijack/templates.py`; `export.py` writes `templates.tsv` and
+`template_terms.tsv` beside the dictionary).
+
+- **The SKI stays the program.** The terms, their hashes and every other
+  export file are byte for byte what they were; a runtime without
+  templates, or one that ignores them, runs the SKI as before.
+- **A template proves itself.** Abstracting its body over its formals,
+  the last first, gives its key; the runtime checks that before using
+  one (`avon/docs/DESIGN.md` §6.9), and so does `templates.check`. An atom
+  of a body is a reference exactly when aviary's expansion expands it.
+- **It is lean-ski's template.** `(formals, open body)` is what
+  `Ski/JetTable.lean`'s `jetTable` licenses as a supercombinator proof jet
+  (`avon/docs/DESIGN.md` §18.1), with the same exclusions: no rule without
+  formals, no open body, no η-template (`λ xs. G xs`, which instantiating
+  would repeat forever).
+
+On the 17 compilable corpus programs, 744 rules give 736 templates, the
+other 8 being η-templates, and every one abstracts back to its term; the
+SKIjack-0 front end gives 993, each one of spec0's rules.
+
+**Numeral operations are named by their terms.** A program that names the
+prelude's `natAdd`, `natSub`, `natMul`, `natIfEq` or `natIfLe` (`SPEC.md`
+§4) gets `words.tsv` beside its templates (`templates.write_words`): each
+operation's §5 hash, its name (`add`, `sub`, `mul`, `ifeq`, `ifle`) and
+its term. Avon's data jets (`avon/docs/DESIGN.md` §6.10) hold numerals as
+numbers and run these natively on them, after checking each term against
+its hash and running it on small numerals. An operation another needs is
+listed with it: `natMul` adds with `natAdd`. A program's own `natAdd` is
+its code and is never listed.
+
+## 10. Inlining: fewer calls, the same values
+
+**An optional pass unfolds small functions where they are called.**
+`skijack.compile(..., inline=True)`, or `python3 -m skijack --inline`,
+runs `skijack/inline.py` between macro expansion and case lowering. A call
+to a top-level function that is not recursive, takes at least one
+argument, and has a body of at most twelve nodes becomes that body with
+the arguments in place; a case on a constructor written out takes its
+branch; a case of a case pushes small alternatives into the inner
+branches. `and (implies x y) r` becomes a case on `x`, and in its `True`
+branch a case on `y`: two dispatches where there were two calls, two
+dispatches and a boolean built and taken apart.
+
+- **The values are the same.** Each rewrite is an equation of the lambda
+  calculus. Compiled with the pass, the SKIjack-0 front end changes 134 of
+  its 492 terms and still compiles its own source, the 67 edge programs
+  and random ones exactly as Python does without it
+  (`tests/test_inline.py`; `run0 --inline`, with and without Avon's
+  templates).
+- **No work is copied.** An argument replaces a parameter only if it is a
+  bare name, or the parameter is used at most once and not under a
+  lambda, a case's branches counting as one use. Constants are never
+  unfolded. A rewrite that a local binder would capture is left out, and
+  so is anything near a quotation, a scry or a namespace literal, and the
+  equations of cores.
+- **It is off by default.** The terms change, so a program compiled
+  without it is byte for byte what it was, and every export with it.
+- **It pays under templates, not as pure SKI.** A larger body is more
+  S/K plumbing: the front end as pure SKI takes 369 million contractions
+  inlined against 307 million, and with Avon's templates and data jets
+  14.4 million against 17.4 million. The Reduceron's compiler inlines
+  for the same reason (its Table 3); `avon/docs/BENCHMARK.md` has the
+  measurements.

@@ -50,6 +50,9 @@ def main(argv=None) -> int:
                     help="run NAME (a level-1 declaration) and decode it")
     ap.add_argument("--fuel", type=int, default=None,
                     help="override the fuel of --run")
+    ap.add_argument("--inline", action="store_true",
+                    help="unfold small functions at their calls (skijack.inline): "
+                         "other terms, the same values")
     ap.add_argument("--max-steps", type=int, default=5_000_000,
                     help="host contraction cap (default 5,000,000)")
     args = ap.parse_args(argv)
@@ -101,7 +104,7 @@ def _run(args) -> int:
             print(f"{args.file}: {p}", file=sys.stderr)
         return 1
 
-    exp = expand_program(program)
+    exp = expand_program(program, inline=args.inline)
 
     if args.expand:
         for name in sorted(exp.terms):

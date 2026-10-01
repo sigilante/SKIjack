@@ -45,7 +45,7 @@ from .generate import (AnswerType, ObjectType, PathType, find_answer_type,
 from .check import check as _check
 from .quote import Encoder, level1_names
 
-__all__ = ["ExpandError", "Expansion", "expand_program", "PRELUDE_NAMES",
+__all__ = ["ExpandError", "Expansion", "expand_program", "PRELUDE_NAMES", "NAT_NAMES",
            "ISA_NAMES", "Level1Program", "FUEL_PLACEHOLDER"]
 
 #: the free atom that stands in for elided fuel, ``<t>@[]`` -- the
@@ -79,6 +79,15 @@ def K_(*terms: Term) -> Term:
 #: own built-ins, reached by name.
 PRELUDE_NAMES = ("pair", "hd", "tl", "nil", "cons", "zero", "suc")
 
+#: operations on Scott numerals (``Zero | Suc nat``), installed only when a
+#: program names one and does not define it, so a program that names none
+#: compiles as before.  ``natSub`` truncates at zero; ``natIfEq m n x y`` is
+#: ``x`` when ``m = n``, else ``y``, and ``natIfLe`` the same for ``m <= n``,
+#: so no boolean type is assumed.  A runtime may run them natively on
+#: numerals it holds as words (avon ``docs/DESIGN.md`` §6.10), identified
+#: by these terms' hashes; see :func:`skijack.templates.write_words`.
+NAT_NAMES = ("natAdd", "natSub", "natMul", "natIfEq", "natIfLe")
+
 #: the three primitives.  ``SURFACE-LANGUAGE-DESIGN.md`` §6b keeps two
 #: symbol tables: outside quotation these names are the ISA, inside it
 #: they are the object type's constructors.  Quotation is a later step,
@@ -93,6 +102,21 @@ _BUILTIN_OK = set(TIER1_NAMES)
 
 
 # ---------------------------------------------------------------- utilities
+
+def _mentions(x, out: Set[str]) -> Set[str]:
+    """Every identifier in a parsed program, bound or free: enough to tell
+    whether it names a :data:`NAT_NAMES` operation."""
+    stack = [x]
+    while stack:
+        y = stack.pop()
+        if isinstance(y, A.Name):
+            out.add(y.name)
+        elif isinstance(y, (list, tuple)):
+            stack.extend(y)
+        elif hasattr(y, "__dataclass_fields__"):
+            stack.extend(getattr(y, f) for f in y.__dataclass_fields__)
+    return out
+
 
 def free_names(e: A.Expr) -> Set[str]:
     """Names occurring free in an expression (binders of ``Lambda`` and of
@@ -460,6 +484,12 @@ class Expansion:
     #: name -> the (key datum, answer datum) pairs of a namespace literal
     namespaces: Dict[str, Tuple[Tuple[Term, Term], ...]] = field(
         default_factory=dict)
+    #: backend rule name -> (kind, label), for every rule the expander
+    #: defined with formals: kind is prelude, ctor, eq, rec (a recursion's
+    #: body), code (a group member's body), group (a group's tuple, pick,
+    #: sel or gen) or lift; the label is the source name it serves.
+    #: Bookkeeping only: no term depends on it (skijack.templates).
+    rule_kinds: Dict[str, Tuple[str, str]] = field(default_factory=dict)
 
     def term(self, name: str) -> Term:
         return self.terms[name]
@@ -472,16 +502,18 @@ class Expansion:
 
 
 class _Codegen:
-    def __init__(self, env: Environment, resolve, helper_names=None):
+    def __init__(self, env: Environment, resolve, helper_names=None, kinds=None):
         self.env = env
         self.resolve = resolve          # source name -> backend Atom, or None
         self.helper_names: List[str] = ([] if helper_names is None
                                         else helper_names)
+        #: shared with Expansion.rule_kinds: each lift's kind and label
+        self.kinds: Dict[str, Tuple[str, str]] = {} if kinds is None else kinds
 
     def with_resolver(self, resolve) -> "_Codegen":
         """The same code generator under a different name environment --
         one per core, so a core's equations see their siblings first."""
-        return _Codegen(self.env, resolve, self.helper_names)
+        return _Codegen(self.env, resolve, self.helper_names, self.kinds)
 
     def gen(self, e: A.Expr, scope: Sequence[str], owner: str) -> Term:
         """Compile ``e``; ``scope`` is the enclosing binder list in order."""
@@ -515,6 +547,7 @@ class _Codegen:
         term = self.gen(body, inner_scope, owner)
         self.env.define_rule(name, tuple(inner_scope), term)
         self.helper_names.append(name)
+        self.kinds[name] = ("lift", owner)
         out: Term = a(name)
         for c in captured:
             out = KApp(out, v(c))
@@ -549,8 +582,8 @@ def _mangle(name: str, used: Set[str]) -> str:
 # -------------------------------------------------------------- the driver
 
 def expand_program(program: A.Program, env: Optional[Environment] = None,
-                   generate_forms: bool = True, check: bool = True
-                   ) -> Expansion:
+                   generate_forms: bool = True, check: bool = True,
+                   inline: bool = False) -> Expansion:
     """Compile a program to closed ``{S,K,I}`` terms, one per name.
 
     With ``check`` (the default), Stage A runs first, over the *parsed*
@@ -560,17 +593,26 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     :func:`skijack.generate.generate` then adds the type-generated forms
     -- the walker, the rebuilder, the default ISA step equations and each
     interpreter core's ``step`` and fuel loop -- as surface declarations.
+    With ``inline``, :mod:`skijack.inline` unfolds small functions at their
+    calls first: different terms, denoting the same values; off by
+    default, so that the terms are what they always were.
     """
     if env is None:
         env = Environment()
     _counter["n"] = 0
+    # the numeral operations the program names without defining
+    defined = {d.name for d in program.decls
+               if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
+    mentioned = _mentions(program.decls, set())
+    nat_ops = tuple(n for n in NAT_NAMES if n in mentioned and n not in defined)
+    prelude = PRELUDE_NAMES + nat_ops
     if check:
-        _check(program, PRELUDE_NAMES)
+        _check(program, prelude)
     if generate_forms:
         program = _generate(program)
     if check:
         from .typecheck import typecheck   # Stage B, over the generated program
-        typecheck(program, PRELUDE_NAMES, generated=generate_forms)
+        typecheck(program, prelude, generated=generate_forms)
 
     # --- collect declarations
     types: Dict[str, A.TypeDecl] = {}
@@ -641,6 +683,61 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     # and §4): a fuel numeral is what a generated loop peels.
     env.define_rule("zero", (_z, _sc), v(_z))
     env.define_rule("suc", (_n, _z, _sc), K_(v(_sc), v(_n)))
+    kinds: Dict[str, Tuple[str, str]] = {
+        nm: ("prelude", nm) for nm in ("pair", "hd", "tl", "nil", "cons", "zero", "suc")}
+    # the numeral operations, each `op := Y opGen` with opGen taking itself
+    # first, and a helper rule per case branch
+    if nat_ops:
+        _f, _m, _n, _k, _j = "\x00f", "\x00m", "\x00n", "\x00k", "\x00j"
+        _xx, _yy = "\x00x", "\x00y"
+        # a numeral's cases: m z s is z at zero and s j at j + 1
+
+        def _rules(op, rules):
+            for nm, formals, body in rules:
+                env.define_rule(nm, formals, body)
+                kinds[nm] = ("prelude", op)
+                used.add(nm)
+            env.define_alias(op, K_(a("Y"), a(op + "Gen")))
+            kinds[op] = ("prelude", op)
+            used.add(op)
+            backend[op] = op
+
+        needed = set(nat_ops)
+        if "natMul" in needed:
+            needed.add("natAdd")              # natMul's successor case adds
+        if "natAdd" in needed:
+            _rules("natAdd", [                # m + 0 = m; m + (k+1) = (m + k) + 1
+                ("natAddGen", (_f, _m, _n), K_(v(_n), v(_m), K_(a("natAddS"), v(_f), v(_m)))),
+                ("natAddS", (_f, _m, _k), K_(a("suc"), K_(v(_f), v(_m), v(_k)))),
+            ])
+        if "natSub" in needed:
+            _rules("natSub", [                # m - 0 = m; m - (k+1) = pred m - k
+                ("natSubGen", (_f, _m, _n), K_(v(_n), v(_m), K_(a("natSubS"), v(_f), v(_m)))),
+                ("natSubS", (_f, _m, _k),
+                 K_(v(_f), K_(v(_m), a("zero"), a("I")), v(_k))),
+            ])
+        if "natMul" in needed:
+            _rules("natMul", [                # m * 0 = 0; m * (k+1) = m + m * k
+                ("natMulGen", (_f, _m, _n), K_(v(_n), a("zero"), K_(a("natMulS"), v(_f), v(_m)))),
+                ("natMulS", (_f, _m, _k), K_(a("natAdd"), v(_m), K_(v(_f), v(_m), v(_k)))),
+            ])
+        if "natIfEq" in needed:
+            _rules("natIfEq", [
+                ("natIfEqGen", (_f, _m, _n, _xx, _yy),
+                 K_(v(_m), K_(v(_n), v(_xx), K_(a("K"), v(_yy))),
+                    K_(a("natIfEqS"), v(_f), v(_n), v(_xx), v(_yy)))),
+                ("natIfEqS", (_f, _n, _xx, _yy, _j),
+                 K_(v(_n), v(_yy), K_(a("natIfEqT"), v(_f), v(_xx), v(_yy), v(_j)))),
+                ("natIfEqT", (_f, _xx, _yy, _j, _k), K_(v(_f), v(_j), v(_k), v(_xx), v(_yy))),
+            ])
+        if "natIfLe" in needed:
+            _rules("natIfLe", [
+                ("natIfLeGen", (_f, _m, _n, _xx, _yy),
+                 K_(v(_m), v(_xx), K_(a("natIfLeS"), v(_f), v(_n), v(_xx), v(_yy)))),
+                ("natIfLeS", (_f, _n, _xx, _yy, _j),
+                 K_(v(_n), v(_yy), K_(a("natIfLeT"), v(_f), v(_xx), v(_yy), v(_j)))),
+                ("natIfLeT", (_f, _xx, _yy, _j, _k), K_(v(_f), v(_j), v(_k), v(_xx), v(_yy))),
+            ])
 
     # --- backend names.  Program-level names (constructors, top-level
     # equations, definitions, the prelude) share one namespace; a core's equations
@@ -711,15 +808,26 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
             for f in fields:
                 body = KApp(body, v(f))
             env.define_rule(backend[c.name], tuple(fields + conts), body)
+            kinds[backend[c.name]] = ("ctor", c.name)
 
-    cg = _Codegen(env, resolve)
+    cg = _Codegen(env, resolve, kinds=kinds)
 
-    # --- passes 1..3 on every equation body, then codegen
-    lowered: Dict[Tuple[Optional[str], str], A.Equation] = {}
+    # --- passes 1..3 on every equation body, then codegen; with ``inline``,
+    # small functions unfolded between macros and case lowering
+    expanded: Dict[Tuple[Optional[str], str], Tuple[Tuple[str, ...], A.Expr]] = {}
     for name, equation, core in equations:
-        body = expand_macros(equation.body, macros)
-        body = desugar(body, ctors, types)
-        lowered[(core, name)] = A.Equation(name, equation.binders, body)
+        expanded[(core, name)] = (equation.binders, expand_macros(equation.body, macros))
+    def_bodies = {d.name: expand_macros(d.expr, macros) for d in defs}
+    if inline:
+        from .inline import inline_bodies
+        top = {n: v for (c, n), v in expanded.items() if c is None}
+        new_eq, def_bodies = inline_bodies(top, def_bodies, ctors, substitute,
+                                           free_names, _fresh)
+        for eq_name, eq_body in new_eq.items():
+            expanded[(None, eq_name)] = (expanded[(None, eq_name)][0], eq_body)
+    lowered: Dict[Tuple[Optional[str], str], A.Equation] = {}
+    for (core, name), (binders, body) in expanded.items():
+        lowered[(core, name)] = A.Equation(name, binders, desugar(body, ctors, types))
 
     def _key_of(core: Optional[str], nm: str):
         """Which equation a name refers to from inside ``core``: a sibling
@@ -808,11 +916,13 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 used.add(gen_name)
                 term = gen.gen(body, scope, bname)
                 env.define_rule(gen_name, tuple(scope), term)
+                kinds[gen_name] = ("rec", bname)
                 env.define_alias(bname, K_(a("Y"), a(gen_name)))
             else:
                 scope = list(equation.binders)
                 term = gen.gen(equation.body, scope, bname)
                 env.define_rule(bname, tuple(scope), term)
+                kinds[bname] = ("eq", bname)
             continue
         n = len(group)
         gname = _mangle(_bname(group[0]) + "Group", used)
@@ -823,14 +933,17 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
         tup = _mangle(gname + "Tuple", used)
         used.add(tup)
         env.define_rule(tup, tuple(xs) + ("\x00c",), K_(v("\x00c"), *[v(x) for x in xs]))
+        kinds[tup] = ("group", gname)
         sels = []
         for j in range(n):
             pick = _mangle(f"{gname}Pick{j}", used)
             used.add(pick)
             env.define_rule(pick, tuple(xs), v(xs[j]))
+            kinds[pick] = ("group", gname)
             sel = _mangle(f"{gname}Sel{j}", used)
             used.add(sel)
             env.define_rule(sel, ("\x00t",), K_(v("\x00t"), a(pick)))
+            kinds[sel] = ("group", gname)
             sels.append(sel)
         # each member's code takes the group first; its calls to members
         # (itself too) project from it
@@ -858,27 +971,29 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 return resolver(_core)(nm)
             term = cg.with_resolver(resolve_in).gen(body, scope, _bname(key))
             env.define_rule(code, tuple(scope), term)
+            kinds[code] = ("code", _bname(key))
             codes.append(code)
         gen_name = _mangle(gname + "Gen", used)
         used.add(gen_name)
         env.define_rule(gen_name, ("\x00t",),
                         K_(a(tup), *[KApp(a(c), v("\x00t")) for c in codes]))
+        kinds[gen_name] = ("group", gname)
         env.define_alias(gname, K_(a("Y"), a(gen_name)))
         for j, key in enumerate(group):
             env.define_alias(_bname(key), K_(a(sels[j]), a(gname)))
 
     # --- plain definitions (``name := expr``)
     for d in defs:
-        body = expand_macros(d.expr, macros)
-        body = desugar(body, ctors, types)
+        body = desugar(def_bodies[d.name], ctors, types)
         term = cg.gen(body, [], backend[d.name])
         env.define_alias(backend[d.name], term)
 
     # --- pass 5: bracket abstraction
     out = Expansion(env=env, backend=dict(backend), types=dict(types),
-                    ctors=dict(ctors))
+                    ctors=dict(ctors), rule_kinds=kinds)
     quoted_names = {d.name for d in qdefs}
-    names = [n for n in dict.fromkeys(list(source_names) + list(PRELUDE_NAMES))
+    names = [n for n in dict.fromkeys(list(source_names) + list(PRELUDE_NAMES)
+                                      + list(nat_ops))
              if n not in quoted_names]
     bare_count: Dict[str, int] = {}
     for (core, name) in lowered:
