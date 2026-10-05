@@ -277,6 +277,32 @@ Events, effects, paths, answers and states are the program's own types;
 the shape fixes only where the arms and the state sit
 (`test_examples::test_a_runtime_can_poke_the_kernel_with_events_it_builds`).
 
+**Entropy.** A kernel gets randomness only as event data; no term
+reduces to fresh bits. A runtime that offers entropy does so only to a
+kernel booted for it (Avon: `avon boot --entropy`), and for such a kernel
+fixes three more shapes, after Arvo's `(quip card _this)`:
+
+- **Effects are a list** (`nil`, `cons`) of cells `[tag data]`, `tag` a
+  numeral.
+- **Events are cells `[tag data]`.** Tag `0` belongs to the runtime: it
+  accepts an outside event only when probing shows a cell whose tag is a
+  successor, and refuses any other, so that no event source chooses a
+  kernel's bits.
+- **A request is the effect `[0 id]`,** `id` a numeral the kernel
+  chooses. The runtime answers each, in the list's order, with its own
+  event `[0 [id bits]]`, `bits` a list of 128 Booleans; a reply's own
+  requests are answered in turn, up to a bound the runtime sets (Avon:
+  16 for one outside event). Boot answers a request of its own: the
+  first event is `[0 [0 bits]]`.
+
+The runtime reads these shapes by probing, as it reads a kernel, and
+logs each reply before applying it, so a replayed kernel sees the same
+bits. Every other effect passes through untouched, and a kernel booted
+without entropy keeps its effects and events entirely its own. Entropy
+comes on request rather than with every event because most events need
+none, and a proof of a poke carries its whole event as private witness
+(`avon/docs/DESIGN.md` §9.1).
+
 ## 5. Names and tiers
 
 Names resolve in a compile-time table and are gone before anything runs.
