@@ -184,3 +184,19 @@ per name, the name and its term's §5 hash. It checks, against
 `tests/test_front0.py` runs the lexer in the reference reducer, and the
 three checks in Avon when `AVON` names an avon binary.
 `avon/tests/front0_check.sh` runs them at full size.
+
+`python/skijack/selfhost/front1.ascii.ski` grows from this front end
+toward the full language, milestone by milestone (avon
+`docs/WORKLIST.md`, Stage 8):
+- M1: cores, macros, signatures, the Tier 1 birds and the numeral
+  operations;
+- M2: interpreter generation;
+- M3: quotation and level-1 runs;
+- M4: scries, paths and namespace literals.
+
+Every corpus program compiles through it to the expander's terms. It is
+still a SKIjack-0 program; the checkers, M5 and M6, are to come.
+`run1.py` checks it against the expander with checking off, on the
+corpus, edge programs, random programs and its own source;
+`tests/test_front1.py` runs those checks when `AVON` is set, and
+`avon/tests/front1_check.sh` runs them at full size.
