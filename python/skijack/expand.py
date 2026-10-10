@@ -502,9 +502,12 @@ class Expansion:
 
 
 class _Codegen:
-    def __init__(self, env: Environment, resolve, helper_names=None, kinds=None):
+    def __init__(self, env: Environment, resolve, helper_names=None, kinds=None,
+                 eta: bool = False):
         self.env = env
         self.resolve = resolve          # source name -> backend Atom, or None
+        #: eta-lifting: a lambda chain that eta-reduces whole is not lifted
+        self.eta = eta
         self.helper_names: List[str] = ([] if helper_names is None
                                         else helper_names)
         #: shared with Expansion.rule_kinds: each lift's kind and label
@@ -513,7 +516,8 @@ class _Codegen:
     def with_resolver(self, resolve) -> "_Codegen":
         """The same code generator under a different name environment --
         one per core, so a core's equations see their siblings first."""
-        return _Codegen(self.env, resolve, self.helper_names, self.kinds)
+        return _Codegen(self.env, resolve, self.helper_names, self.kinds,
+                        self.eta)
 
     def gen(self, e: A.Expr, scope: Sequence[str], owner: str) -> Term:
         """Compile ``e``; ``scope`` is the enclosing binder list in order."""
@@ -534,12 +538,22 @@ class _Codegen:
         raise ExpandError(f"cannot compile {type(e).__name__} in {owner!r}")
 
     def lift(self, lam: A.Lambda, scope: Sequence[str], owner: str) -> Term:
-        """Lambda-lift a lambda chain into its own supercombinator."""
+        """Lambda-lift a lambda chain into its own supercombinator.
+
+        With ``eta``, a chain ``\\p1 .. pn. e p1 .. pn`` with no ``pi`` free
+        in ``e`` is not lifted: it compiles as ``e``.  Lifted, it would be
+        a combinator applied to the binders ``e`` captures (``\\g t. g t``
+        is ``I``, so ``\\t. g t`` became ``I g``).
+        """
         params: List[str] = []
         body: A.Expr = lam
         while isinstance(body, A.Lambda):
             params.append(body.param)
             body = body.body
+        if self.eta:
+            reduced = _eta_strip(params, body)
+            if reduced is not None:
+                return self.gen(reduced, scope, owner)
         fv = free_names(body) - set(params)
         captured = [s for s in scope if s in fv]
         name = _fresh_name(f"{owner}_b", self.env, len(self.helper_names))
@@ -552,6 +566,19 @@ class _Codegen:
         for c in captured:
             out = KApp(out, v(c))
         return out
+
+
+def _eta_strip(params: Sequence[str], body: A.Expr) -> Optional[A.Expr]:
+    """``body`` eta-reduced over ``params``, last first: ``e p`` with ``p``
+    not free in ``e`` gives ``e``; ``None`` when a parameter does not
+    reduce away."""
+    for p in reversed(params):
+        if (isinstance(body, A.App) and isinstance(body.arg, A.Name)
+                and body.arg.name == p and p not in free_names(body.fn)):
+            body = body.fn
+        else:
+            return None
+    return body
 
 
 _counter = {"n": 0}
@@ -583,7 +610,7 @@ def _mangle(name: str, used: Set[str]) -> str:
 
 def expand_program(program: A.Program, env: Optional[Environment] = None,
                    generate_forms: bool = True, check: bool = True,
-                   inline: bool = False) -> Expansion:
+                   inline: bool = False, eta: bool = False) -> Expansion:
     """Compile a program to closed ``{S,K,I}`` terms, one per name.
 
     With ``check`` (the default), Stage A runs first, over the *parsed*
@@ -595,7 +622,10 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     interpreter core's ``step`` and fuel loop -- as surface declarations.
     With ``inline``, :mod:`skijack.inline` unfolds small functions at their
     calls first: different terms, denoting the same values; off by
-    default, so that the terms are what they always were.
+    default, so that the terms are what they always were.  With ``eta``,
+    a lambda chain that eta-reduces whole compiles as what it reduces to,
+    not as a lifted combinator applied to its captures
+    (:meth:`_Codegen.lift`); off by default, for the same reason.
     """
     if env is None:
         env = Environment()
@@ -810,7 +840,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
             env.define_rule(backend[c.name], tuple(fields + conts), body)
             kinds[backend[c.name]] = ("ctor", c.name)
 
-    cg = _Codegen(env, resolve, kinds=kinds)
+    cg = _Codegen(env, resolve, kinds=kinds, eta=eta)
 
     # --- passes 1..3 on every equation body, then codegen; with ``inline``,
     # small functions unfolded between macros and case lowering
