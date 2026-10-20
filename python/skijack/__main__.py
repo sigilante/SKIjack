@@ -15,7 +15,7 @@ from .check import check_program
 from .typecheck import typecheck_program
 from .errors import SkijackError
 from .dictionary import from_expansion, lift, structural_hash
-from .expand import PRELUDE_NAMES, expand_program
+from .expand import expand_program, program_prelude
 from .parser import parse
 from .render import render
 from .run import decode, peel, run_level1, run_policy
@@ -85,14 +85,15 @@ def _run(args) -> int:
         print(render(program, args.render), end="")
         return 0
 
-    problems = check_program(program, PRELUDE_NAMES)
+    prelude = program_prelude(program)
+    problems = check_program(program, prelude)
     if args.check:
         if problems:
             for p in problems:
                 print(f"{args.file}: {p}", file=sys.stderr)
             return 1
         print(f"{args.file}: Stage A clean")
-        problems = typecheck_program(program, PRELUDE_NAMES)
+        problems = typecheck_program(program, prelude)
         if problems:
             for p in problems:
                 print(f"{args.file}: {p}", file=sys.stderr)

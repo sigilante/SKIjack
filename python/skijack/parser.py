@@ -342,10 +342,8 @@ class _Parser:
         if k == "NSOPEN":
             return self.nslit()
         if k == "NUMBER":
-            raise ParseError(
-                f"line {t.line}, column {t.col}: a number is only meaningful "
-                f"in an axis pick ('2@p') or as fuel ('<t>@10'); the calculus "
-                f"has no integer type (SYNTAX.md §8)")
+            self.next()
+            return A.Num(t.number)
         raise ParseError(
             f"line {t.line}, column {t.col}: expected an expression, got "
             f"{t.kind} {t.value!r}")

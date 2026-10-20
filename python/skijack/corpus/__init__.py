@@ -1,8 +1,10 @@
 """The conformance corpus, shipped with the package.
 
-Seventeen programs, each written in both lexicons, that the test suite
-compiles and compares against the hand-built artifact of the companion
-paper.  They are package data rather than test fixtures because they are
+Twenty-two programs, each written in both lexicons.  Eighteen compile,
+and the test suite compares them against the hand-built artifact of the
+companion paper where it has one; the other four carry forms the notes
+describe and this package does not compile yet, and Stage A refuses them
+for stated reasons.  They are package data rather than test fixtures because they are
 the specification's examples: a second implementation is correct when it
 reproduces these, and a reader who installs the package should get them.
 

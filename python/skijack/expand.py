@@ -45,7 +45,8 @@ from .generate import (AnswerType, ObjectType, PathType, find_answer_type,
 from .check import check as _check
 from .quote import Encoder, level1_names
 
-__all__ = ["ExpandError", "Expansion", "expand_program", "PRELUDE_NAMES", "NAT_NAMES",
+__all__ = ["ExpandError", "Expansion", "expand_program", "program_prelude",
+           "PRELUDE_NAMES", "NAT_NAMES",
            "ISA_NAMES", "Level1Program", "FUEL_PLACEHOLDER"]
 
 #: the free atom that stands in for elided fuel, ``<t>@[]`` -- the
@@ -118,11 +119,24 @@ def _mentions(x, out: Set[str]) -> Set[str]:
     return out
 
 
+def program_prelude(program: A.Program) -> Tuple[str, ...]:
+    """The names installed before ``program`` is seen: the prelude, then
+    the numeral operations it names without defining.  The checkers take
+    this list, so a program that names ``natAdd`` checks as it compiles."""
+    defined = {d.name for d in program.decls
+               if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
+    mentioned = _mentions(program.decls, set())
+    return PRELUDE_NAMES + tuple(n for n in NAT_NAMES
+                                 if n in mentioned and n not in defined)
+
+
 def free_names(e: A.Expr) -> Set[str]:
     """Names occurring free in an expression (binders of ``Lambda`` and of
     case branches bind)."""
     if isinstance(e, A.Name):
         return {e.name}
+    if isinstance(e, A.Num):
+        return set()
     if isinstance(e, A.App):
         return free_names(e.fn) | free_names(e.arg)
     if isinstance(e, A.Cell):
@@ -178,6 +192,8 @@ def substitute(e: A.Expr, sub: Dict[str, A.Expr]) -> A.Expr:
         return e
     if isinstance(e, A.Name):
         return sub.get(e.name, e)
+    if isinstance(e, A.Num):
+        return e
     if isinstance(e, A.App):
         return A.App(substitute(e.fn, sub), substitute(e.arg, sub))
     if isinstance(e, A.Cell):
@@ -288,6 +304,8 @@ def expand_macros(e: A.Expr, macros: Dict[str, A.Macro], depth: int = 0,
             budget['work'] -= 1
             return expand_macros(m.body, macros, depth, unfold + 1, budget)
         return e
+    if isinstance(e, A.Num):
+        return e
     if isinstance(e, A.App):
         head, args = _spine(e)
         if isinstance(head, A.Name) and head.name in macros:
@@ -358,7 +376,7 @@ def desugar(e: A.Expr, ctors: Dict[str, Tuple[str, int, int]],
     (``DESIDERATA.md`` item 4, and :func:`skijack.dictionary.lower`).
     This pass is tree to tree.
     """
-    if isinstance(e, A.Name):
+    if isinstance(e, (A.Name, A.Num)):
         return e
     if isinstance(e, A.App):
         return A.App(desugar(e.fn, ctors, types), desugar(e.arg, ctors, types))
@@ -413,6 +431,23 @@ def _lower_case(e: A.Case, ctors, types) -> A.Expr:
 
 
 # --------------------------------------------------- passes 4 and 5: codegen
+
+#: the prelude's ``zero`` and ``suc``, as closed terms: what every type
+#: declared ``Zero | Suc t`` compiles its constructors to (``SPEC.md`` §3.1)
+ZERO_TERM: Term = a("K")
+SUC_TERM: Term = K_(a("S"), K_(a("K"), a("K")),
+                    K_(a("S"), K_(a("K"), K_(a("S"), a("I"))), a("K")))
+
+
+def numeral(n: int) -> Term:
+    """The literal ``n``: ``suc`` applied ``n`` times to ``zero``, built
+    from the terms themselves, so a program that defines its own ``suc``
+    or ``zero`` does not change what a literal means."""
+    t = ZERO_TERM
+    for _ in range(n):
+        t = KApp(SUC_TERM, t)
+    return t
+
 
 @dataclass
 class Level1Program:
@@ -526,6 +561,8 @@ class _Codegen:
                     f"unresolved name {e.name!r} in {owner!r}; free variables "
                     f"do not exist at runtime (SYNTAX.md §8)")
             return t
+        if isinstance(e, A.Num):
+            return numeral(e.value)
         if isinstance(e, A.App):
             return KApp(self.gen(e.fn, scope, owner),
                         self.gen(e.arg, scope, owner))
@@ -600,12 +637,8 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     if env is None:
         env = Environment()
     _counter["n"] = 0
-    # the numeral operations the program names without defining
-    defined = {d.name for d in program.decls
-               if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
-    mentioned = _mentions(program.decls, set())
-    nat_ops = tuple(n for n in NAT_NAMES if n in mentioned and n not in defined)
-    prelude = PRELUDE_NAMES + nat_ops
+    prelude = program_prelude(program)
+    nat_ops = prelude[len(PRELUDE_NAMES):]
     if check:
         _check(program, prelude)
     if generate_forms:

@@ -18,7 +18,8 @@ from conftest import EXPANDABLE, INTERPRETERS, source
 
 COMPILABLE = tuple(EXPANDABLE) + tuple(INTERPRETERS) + (
     "level1-flipa", "tower", "scry-wfq", "scry-wfn", "scry-ns", "scry-block",
-    "parse-chars", "words-to-numbers", "ascii-digits", "kernel-events")
+    "parse-chars", "words-to-numbers", "ascii-digits", "kernel-events",
+    "literals")
 
 NAT = "nat === Zero | Suc nat\n"
 BOOL = "bool === PTrue | PFalse\nEQ a b = PTrue\n"

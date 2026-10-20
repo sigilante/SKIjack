@@ -1,0 +1,16 @@
+-- Numeral literals: `3` is `Suc (Suc (Suc Zero))`, the same term.  A
+-- literal is a numeral of the type its context gives it; one its
+-- context leaves open is the program's one numeral type, here `nat`
+-- (SPEC.md section 9b).  A literal is unary: `n` is 8n + 1 atoms.
+-- `toNum` is the case of words-to-numbers, written with literals,
+-- and compiles to its term.
+nat === Zero | Suc nat
+word === One | Two | Three
+bool === PTrue | PFalse
+
+toNum w = w |> { One 1; Two 2; Three 3 }
+three := toNum Three
+answer := natAdd (toNum Two) 40
+isSix n = natIfEq n 6 PTrue PFalse
+pred n = n |> { Zero 0; Suc m m }
+five := pred 6
