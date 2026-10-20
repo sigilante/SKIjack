@@ -105,6 +105,14 @@ def test_lambda_consumes_exactly_one_dot_and_wings_keep_the_rest():
     assert parse_expr_text("r.a.b") == A.Name("r.a.b")
 
 
+def test_every_ascii_corpus_file_is_seven_bit():
+    """front1 reads a program as 7-bit codes, so an ASCII spelling holds
+    nothing else, comments included."""
+    for stem, lx, path in ALL_SOURCES:
+        if lx == "ascii":
+            assert path.read_bytes().isascii(), path.name
+
+
 def test_a_bare_number_is_a_literal():
     assert parse_expr_text("f 3") == A.App(A.Name("f"), A.Num(3))
     assert parse_expr_text("f 3", "unicode") == A.App(A.Name("f"), A.Num(3))
