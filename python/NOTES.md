@@ -379,15 +379,21 @@ leave the names to the combinators; and when two names share a term
    ones that render everywhere, a namespace literal closes with the
    ordinary `}` in both lexicons, `UNICODE_ALIASES` is empty, and the
    table is a bijection with no exceptions at all.
-3. **Core fixpoint strategy: one fixpoint per equation, not one over a
-   tuple.** A self-recursive equation `f b1 … bn = body` compiles to
+3. **Core fixpoint strategy: one fixpoint per recursive group.** A
+   self-recursive equation `f b1 … bn = body` compiles to
    `AL(f, Y fGen)` with `D(fGen, [self, b1, …, bn], body[f := self])`,
    which is the `spGen`/`sp` and `wfGen`/`whnfF` shape of
    `tower_harness.py`. A non-recursive equation is a plain `D`. This is what
    reproduces `EXAMPLES.md`'s 42 and 43 atoms for `add` and `sub`
-   exactly. The cost is that **mutual recursion between two equations is
-   refused** with a named error rather than mis-compiled; a tuple
-   fixpoint would handle it and is the natural next step.
+   exactly (`test_expand::test_a_self_recursive_equation_is_compiled_as_before`).
+   **Mutually recursive equations share one fixpoint**: Tarjan's
+   algorithm groups them, the group's generator returns the Scott tuple
+   of the members' codes, each taking the group first, and each member
+   is its projection from `Y` of the generator
+   (`test_expand::test_mutual_recursion_ties_one_fixpoint_per_group`,
+   and inside a core `test_expand::test_mutual_recursion_inside_a_core`).
+   A group of one keeps its own `Y fGen`, so no term compiled before
+   joint fixpoints changed.
 4. **Every lambda is lambda-lifted into its own supercombinator.** A
    case branch with binders, and a `\x.e`, become a helper `D` over the
    enclosing binders that occur free in the body, applied to those
