@@ -54,7 +54,7 @@ def test_the_front_end_compiles_with_checking():
     assert "front" in front().terms
 
 
-EDGES = {**run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4}
+EDGES = {**run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4, **run1.EDGESL}
 
 
 def test_the_aviary_edges_are_edges():
