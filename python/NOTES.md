@@ -409,11 +409,14 @@ leave the names to the combinators; and when two names share a term
    its own token; `atom` builds a qualified name from `NAME ('.' NAME)*`
    and the lambda rule eats the dot after its binder, so `\x.a.b` is
    `Lambda("x", Name("a.b"))`.
-8. **A bare number is refused in expression position.** `atom :=
-   … | NUMBER | …` in the sketch has nothing to compile to, since the
-   calculus has no integer type (`SYNTAX.md` §8). Numbers appear only in
-   an axis pick (`2@p`) and as fuel (`<t>@10`), both of which the lexer
-   turns into their own token kinds.
+8. **A bare number is a numeral literal.** `atom := … | NUMBER | …` in
+   the sketch compiles to the Scott numeral: `5` is `suc` applied five
+   times to `zero`, built from the prelude's own terms, so a program that
+   redefines `suc` does not change it. The literal stays an `ast.Num`
+   node until codegen, so `--render` spells it as written. An axis pick
+   (`2@p`) and fuel (`<t>@10`) keep their numbers as their own token
+   kinds. Stage B types a literal as a numeral type (`SPEC.md` §9b), and
+   a literal inside a quotation is refused.
 9. **Backend names are mangled on collision with an aviary bird.** The
    kernel refuses to shadow a built-in, so an equation named `C` is defined
    as `Cc` — the form `EXAMPLES.md`'s codegen notes record. Mangling
@@ -528,11 +531,10 @@ leave the names to the combinators; and when two names share a term
     `name := <t>` (a datum) and `name := I |- <t>@n` (an executable)
     compile; a `<t>` inside an equation body still raises, because §6 makes
     the level a property of the *declaration*.
-29. **Inner fuel is written in the surface, not as a numeric literal.**
-    T2's `whnfF three <I K>` uses `three = Suc (Suc (Suc Zero))` over a
-    declared `nat`, because the calculus has no integer type
-    (`SYNTAX.md` §8) and decision 8 refuses a bare number in expression
-    position. It compiles to the artifact's `natP(3)` exactly. Only the
+29. **Inner fuel is a numeral over a declared `nat`.** T2's `whnfF
+    three <I K>` uses `three = Suc (Suc (Suc Zero))`, as the artifact
+    spells it; `three = 3` compiles to the same term (decision 8). It
+    compiles to the artifact's `natP(3)` exactly. Only the
     *outer* fuel of `@n` is a numeral the token table supplies.
 30. **Elided fuel has no closed term.** `<t>@[]` yields a
     `Level1Program` whose `.term` raises and whose `.placeholder` carries

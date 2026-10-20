@@ -23,6 +23,16 @@ cyclic type; unification is equirecursive, so those are admitted, as is
 ``omega = S I I (S I I)``.  The nominal form is the stronger check, and
 the one to write when the check is wanted.
 
+A literal ``5`` is a numeral of a type declared ``Zero | Suc t`` -- two
+constructors, the first with no fields and the second with one field of
+the type itself -- or of ``fuel``, the prelude's own numerals; the term
+is the same for all of them.  Its type is a variable that the binding
+group it occurs in must settle on one of those types.  A literal the
+group leaves unsettled defaults: to the one declared numeral type, or to
+``fuel`` when the program declares none, and with two declared it is an
+error that asks for the context to say which.  Defaulting happens before
+the group is generalized, so no definition is polymorphic in a literal.
+
 The operands of ``EQ`` carry a *data* constraint: a type variable so
 marked may be bound to a sum type and never to an arrow, which is how
 ``f x = EQ x PTrue`` followed by ``g := f K`` is refused although ``x``
@@ -173,6 +183,7 @@ class _Types:
         self.env: Dict[str, Scheme] = {}         # program-level names
         self.core_env: Dict[str, Dict[str, Scheme]] = {}
         self.mono: Dict[str, Type] = {}          # names in the group being inferred
+        self.literals: List[Tuple[TVar, int]] = []   # literals not yet settled
 
     # ---- variables and schemes (every walker is cycle-safe)
 
@@ -446,6 +457,10 @@ class _Types:
     def infer(self, e: A.Expr, bound: Dict[str, Type], core: Optional[str]) -> Type:
         if isinstance(e, A.Name):
             return self.lookup(e.name, bound, core)
+        if isinstance(e, A.Num):
+            t = self.fresh()
+            self.literals.append((t, e.value))
+            return t
         if isinstance(e, A.Lambda):
             p = self.fresh()
             body = self.infer(e.body, {**bound, e.param: p}, core)
@@ -595,10 +610,14 @@ class _Types:
             assert isinstance(d.expr, A.Quote)
             if object_t is None or lt is None:
                 continue
+            site = Site("definition", d.name)
+            self.literals = []
             try:
                 self.run_decl(d, d.expr, macros, object_t, lt.result.name)
+                self.settle([(t, n, site) for t, n in self.literals])
             except _Fail as ex:
-                self.add(Site("definition", d.name), str(ex))
+                self.add(site, str(ex))
+            self.literals = []
         return self.problems
 
     def run_decl(self, d: A.Def, q: A.Quote, macros, object_t: Type,
@@ -623,21 +642,57 @@ class _Types:
         self.unify(TCon(result_name), r)
         self.env[d.name] = Scheme((), (), TCon(result_name))
 
+    # ---- literals
+
+    def numeral_types(self) -> List[str]:
+        """The declared types shaped ``Zero | Suc t``, in declaration order."""
+        return [d.name for d in self.types.values()
+                if len(d.ctors) == 2 and not d.ctors[0].fields
+                and d.ctors[1].fields == (d.name,)]
+
+    def settle(self, pending: List[Tuple[TVar, int, Site]]) -> None:
+        """Each literal of a group: checked against the type its context
+        gave it, or defaulted (see the module's text)."""
+        numerals = self.numeral_types()
+        for t, n, site in pending:
+            r = resolve(t)
+            if isinstance(r, TCon):
+                if r.name != "fuel" and r.name not in numerals:
+                    self.add(site, f"the literal {n} where a value of type "
+                                   f"{render_type(r)} is expected; a literal "
+                                   f"is a numeral, of a type declared "
+                                   f"'Zero | Suc t'")
+                continue
+            if len(numerals) > 1:
+                self.add(site, f"the literal {n} could be any of "
+                               f"{', '.join(numerals)}; its context must say "
+                               f"which")
+                continue
+            try:
+                self.unify(r, TCon(numerals[0] if numerals else "fuel"))
+            except _Fail as ex:
+                self.add(site, f"the literal {n}: {ex}")
+
     def infer_group(self, group: List[str], item_of, expanded) -> None:
         for key in group:
             self.mono[key] = self.fresh()
         results: Dict[str, Type] = {}
+        literals: List[Tuple[TVar, int, Site]] = []
         for key in group:
             name, core, binders, body, site = item_of[key]
+            self.literals = []
             try:
                 bound: Dict[str, Type] = {b: self.fresh() for b in binders}
                 t = _arrows([bound[b] for b in binders],
                             self.infer(expanded[key], bound, core))
                 self.unify(self.mono[key], t)
                 results[key] = t
+                literals += [(lt, n, site) for lt, n in self.literals]
             except _Fail as ex:
                 self.add(site, str(ex))
                 results[key] = self.fresh()
+        self.literals = []
+        self.settle(literals)
         for key in group:
             del self.mono[key]
         for key in group:

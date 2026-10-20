@@ -71,6 +71,11 @@ ASCII digits so both lexicons denote the same tree. A subscript cannot
 start an identifier, which keeps subscript fuel unambiguous. A
 capitalized identifier is a constructor name (CNAME).
 
+**Numbers** are decimal digits `[0-9]+` in both lexicons. A number
+followed by the axis mark is an axis (`2@p`, `2⊑p`); fuel is `@n` in
+ASCII and subscript digits in Unicode; any other number is a numeral
+literal (§4).
+
 **Maximal munch:** `:=*`/`:=!` before `:=`; `===` and `=>` before `=`;
 `|>`/`|-` before `|` (`test_lexicon::test_maximal_munch_ascii`). In ASCII
 `<digits>@` is an axis pick and `@<digits>` or `@[]` is fuel, so `@` is
@@ -123,9 +128,10 @@ Parsing decisions that the grammar alone does not settle:
   than application (`test_parser::test_interpreter_selection_binds_looser_than_application`).
 - **Cell items are atoms**, so an application inside a cell is
   parenthesized: `[(f x) y]`.
-- **A bare number is refused** in expression position: the calculus has
-  no integer type. Numbers occur only in an axis pick and as fuel.
-  (`test_parser::test_a_bare_number_is_refused`)
+- **A bare number is a literal** in expression position, an atom like a
+  name (`test_parser::test_a_bare_number_is_a_literal`); the number
+  before an axis mark is still an axis
+  (`test_parser::test_a_number_before_the_axis_mark_is_still_a_pick`).
 - **The lambda rule consumes exactly one dot**, so `\x.a.b` is
   `Lambda(x, Name(a.b))`.
 - **`name := { … }` is a core; `name := ns{ … }` is a namespace literal.**
@@ -223,9 +229,16 @@ type variables and type applications are not spellable in one
   `natMul` installs `natAdd` too. A runtime may run them natively on numerals
   it holds as numbers (§9 of `RUNTIME-DESIGN.md`).
 - **Booleans** are `K` for yes and `K I` for no.
-- **Numerals** are Scott numerals; there is no integer type. Fuel `@n`
-  is the one place the token table supplies a numeral; an inner numeral
-  is written in the surface (`three = Suc (Suc (Suc Zero))`).
+- **Numerals** are Scott numerals. A literal `n` is the numeral
+  `suc (suc … zero)` with `n` applications, built from the prelude's own
+  terms `K` and `S (K K) (S (K (S I)) K)`: the constructors of every type
+  declared `Zero | Suc t`, so `3` and `Suc (Suc (Suc Zero))` compile to
+  the same term (`test_literals::test_a_literal_compiles_to_its_hand_spelled_twin`).
+  A program that defines its own `zero` or `suc` does not change what a
+  literal means (`test_literals::test_a_program_that_defines_suc_does_not_change_a_literal`).
+  A literal is unary: `n` costs `8n + 1` atoms, so `200` is 1,601. Stage
+  B gives a literal its type (§9b); a literal inside a quotation is
+  refused (§9), since a numeral is a level-0 value.
 - **Case.** `e |> { C₁ b… body₁; C₂ b… body₂; … }` applies `e` to one
   continuation per constructor **in declaration order, not source
   order** (`test_expand::test_case_uses_declaration_order_not_source_order`).
@@ -464,6 +477,10 @@ term is the same with the check on or off
 | e | inside a quotation, a name that is neither a constructor of the object type nor a level-0 name; at level 0 every declared type's constructors are ordinary and only the ISA is reserved | `SymbolTableError` |
 | f | unresolved names; duplicate declarations | `ScopeError` |
 
+A literal inside a quotation is a `DataError`: the brackets hold object
+terms, and a literal is a level-0 numeral
+(`test_literals::test_a_literal_inside_a_quotation_is_refused`).
+
 Stage A's data rule establishes one direction only: no accepted program
 holds a provable function in a data position. With binders untyped here,
 a bound variable's kind is unknown, so `f x = EQ x PTrue` with
@@ -514,6 +531,19 @@ error (`test_types::test_a_function_is_not_a_datum`).
   marked may be bound to a sum type and never to a built arrow. That is
   how `f x = EQ x PTrue` with `g := f K` is refused although `x` is a
   bare binder (`test_types::test_an_operand_of_eq_may_not_be_a_function_through_a_binder`).
+- **Literals.** A literal is a numeral of a *numeral type*: a declared
+  type with two constructors, the first with no fields and the second
+  with one field of the type itself, or `fuel`, the prelude's numerals.
+  Its context settles which, within its binding group; a literal the
+  group leaves open defaults to the one declared numeral type, or to
+  `fuel` if the program declares none, and with two declared it is an
+  error that asks the context to say which
+  (`test_literals::test_with_two_numeral_types_the_context_must_say_which`).
+  Defaulting happens before the group is generalized, so `inc x =
+  natAdd x 1` is `nat -> nat`, never polymorphic
+  (`test_literals::test_a_definition_is_not_polymorphic_in_a_literal`).
+  A signature is checked after its definition is settled and does not
+  choose a literal's type.
 - **Level 1.** A quotation `<t>` has the program's object type; a
   namespace literal has type `object -> answer`; a run `interp p… |-
   <t>@n` applies the interpreter's loop to its parameters, then to
@@ -555,14 +585,15 @@ operation a runtime's jet table performs.
 Stated explicitly:
 
 - mutual recursion between equations (§3.2); the capturing macro `:=!`
-  (§3.5); a bare number in expression position (§2); a quotation inside
+  (§3.5); a literal inside a quotation (§9); a quotation inside
   an equation body (§6); a core naming itself (§3.3); `step<App>` (§7);
   two object types, or two interpreters over different alphabets in one
   program (§7);
 - qualified names resolve to nothing; segment payloads and path-typed
   expressions are refused; mount tables are not built (§8);
-- there is no integer type (§4), no standard subject and therefore no
-  `EQ` and no shared quoted library — a name used twice inside one
+- there is no binary integer type, only the unary literal (§4); there
+  is no standard subject and therefore no `EQ` and no shared quoted
+  library — a name used twice inside one
   quotation is duplicated in the datum (§5, §6);
 - a declared type has no parameters, and a signature names declared
   types only (§9b); the pre-0.2.0 spelling of a blocked payload,

@@ -123,6 +123,8 @@ def free_names(e: A.Expr) -> Set[str]:
     case branches bind)."""
     if isinstance(e, A.Name):
         return {e.name}
+    if isinstance(e, A.Num):
+        return set()
     if isinstance(e, A.App):
         return free_names(e.fn) | free_names(e.arg)
     if isinstance(e, A.Cell):
@@ -178,6 +180,8 @@ def substitute(e: A.Expr, sub: Dict[str, A.Expr]) -> A.Expr:
         return e
     if isinstance(e, A.Name):
         return sub.get(e.name, e)
+    if isinstance(e, A.Num):
+        return e
     if isinstance(e, A.App):
         return A.App(substitute(e.fn, sub), substitute(e.arg, sub))
     if isinstance(e, A.Cell):
@@ -288,6 +292,8 @@ def expand_macros(e: A.Expr, macros: Dict[str, A.Macro], depth: int = 0,
             budget['work'] -= 1
             return expand_macros(m.body, macros, depth, unfold + 1, budget)
         return e
+    if isinstance(e, A.Num):
+        return e
     if isinstance(e, A.App):
         head, args = _spine(e)
         if isinstance(head, A.Name) and head.name in macros:
@@ -358,7 +364,7 @@ def desugar(e: A.Expr, ctors: Dict[str, Tuple[str, int, int]],
     (``DESIDERATA.md`` item 4, and :func:`skijack.dictionary.lower`).
     This pass is tree to tree.
     """
-    if isinstance(e, A.Name):
+    if isinstance(e, (A.Name, A.Num)):
         return e
     if isinstance(e, A.App):
         return A.App(desugar(e.fn, ctors, types), desugar(e.arg, ctors, types))
@@ -413,6 +419,23 @@ def _lower_case(e: A.Case, ctors, types) -> A.Expr:
 
 
 # --------------------------------------------------- passes 4 and 5: codegen
+
+#: the prelude's ``zero`` and ``suc``, as closed terms: what every type
+#: declared ``Zero | Suc t`` compiles its constructors to (``SPEC.md`` §3.1)
+ZERO_TERM: Term = a("K")
+SUC_TERM: Term = K_(a("S"), K_(a("K"), a("K")),
+                    K_(a("S"), K_(a("K"), K_(a("S"), a("I"))), a("K")))
+
+
+def numeral(n: int) -> Term:
+    """The literal ``n``: ``suc`` applied ``n`` times to ``zero``, built
+    from the terms themselves, so a program that defines its own ``suc``
+    or ``zero`` does not change what a literal means."""
+    t = ZERO_TERM
+    for _ in range(n):
+        t = KApp(SUC_TERM, t)
+    return t
+
 
 @dataclass
 class Level1Program:
@@ -526,6 +549,8 @@ class _Codegen:
                     f"unresolved name {e.name!r} in {owner!r}; free variables "
                     f"do not exist at runtime (SYNTAX.md §8)")
             return t
+        if isinstance(e, A.Num):
+            return numeral(e.value)
         if isinstance(e, A.App):
             return KApp(self.gen(e.fn, scope, owner),
                         self.gen(e.arg, scope, owner))

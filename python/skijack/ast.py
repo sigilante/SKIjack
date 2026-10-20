@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 __all__ = [
-    "Expr", "Name", "App", "Cell", "Quote", "Scry", "Pick", "Lambda",
+    "Expr", "Name", "Num", "App", "Cell", "Quote", "Scry", "Pick", "Lambda",
     "Case", "NsLit", "Path", "Seg",
     "Decl", "TypeDecl", "Ctor", "Sig", "Equation", "Core", "Macro", "Def",
     "Program", "POLICY",
@@ -30,6 +30,16 @@ class Name:
     resolving it to an axis chain is not planned -- there is no runtime
     environment for an axis to index (``DESIDERATA.md`` item 2)."""
     name: str
+
+
+@dataclass(frozen=True)
+class Num:
+    """``5``: a numeral literal.  It denotes the Scott numeral
+    ``suc (suc (suc (suc (suc zero))))`` of any type declared
+    ``Zero | Suc t``, built from the prelude's terms whatever a program
+    calls its own ``zero`` and ``suc``.  Kept as a node, not desugared
+    here, so a rendered program spells it as it was written."""
+    value: int
 
 
 @dataclass(frozen=True)
@@ -112,7 +122,7 @@ class NsLit:
     facts: Tuple[Tuple[Path, "Expr"], ...]
 
 
-Expr = Union[Name, App, Cell, Quote, Scry, Pick, Lambda, Case, NsLit]
+Expr = Union[Name, Num, App, Cell, Quote, Scry, Pick, Lambda, Case, NsLit]
 
 
 # -------------------------------------------------------------- declarations

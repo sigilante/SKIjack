@@ -267,11 +267,11 @@ verification probes are host-level uninterpreted constants used at the
 metalevel to observe a term; they are admitted in the test harness and
 nowhere in the language. Free variables do not exist at runtime: bracket
 abstraction closes every term, so there is no environment at all, and an
-unresolved name at compile time is an error. There is no integer type
-for now: Scott numerals serve as fuel and nothing else, and the language
-sticks to the three atoms. (A binary Scott-encoded numeral type with
-runtime jets, in the manner of Vere's atoms, is the obvious later
-addition; it is deliberately not here.)
+unresolved name at compile time is an error. A numeral literal `5` is
+sugar for the Scott numeral `suc (suc (suc (suc (suc zero))))`, so the
+language still sticks to the three atoms. (A binary Scott-encoded
+numeral type with runtime jets, in the manner of Vere's atoms, is the
+obvious later addition; it is deliberately not here.)
 
 ## 9. Open items
 

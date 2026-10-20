@@ -51,7 +51,7 @@ MANY = 2        # "used more than once, or under a lambda"
 
 
 def size(e: A.Expr) -> int:
-    if isinstance(e, A.Name):
+    if isinstance(e, (A.Name, A.Num)):
         return 1
     if isinstance(e, A.App):
         return size(e.fn) + size(e.arg)
@@ -102,6 +102,8 @@ def uses(e: A.Expr, x: str) -> int:
     lambda).  Of a case's branches the most used counts, one running."""
     if isinstance(e, A.Name):
         return 1 if e.name == x else 0
+    if isinstance(e, A.Num):
+        return 0
     if isinstance(e, A.App):
         return min(MANY, uses(e.fn, x) + uses(e.arg, x))
     if isinstance(e, A.Lambda):
@@ -205,6 +207,8 @@ class _Pass:
 
     def case(self, e: A.Case, bound: Set[str]) -> A.Expr:
         scrut = e.scrutinee
+        if isinstance(scrut, A.Num) and e.branches:
+            scrut = self.numeral(scrut, e.branches[0][0])
         head, args = spine(scrut)
         # a known constructor: its branch, the fields substituted
         if isinstance(head, A.Name) and head.name in self.ctors and head.name not in bound:
@@ -232,6 +236,21 @@ class _Pass:
             out = self.rewrite(A.Case(scrut.scrutinee, tuple(inner)), bound)
             return e if depth(out) > MAX_DEPTH else out
         return e
+
+
+    def numeral(self, n: A.Num, cname: str) -> A.Expr:
+        """A literal scrutinized by a case over a type whose constructors
+        take 0 and 1 fields, in that order, is that type's first
+        constructor or its second applied to n - 1: the terms are the
+        same, so the known-constructor rule applies to it as it does to
+        ``Suc (Suc Zero)``."""
+        tname = self.ctors[cname][0]
+        cs = sorted((idx, c, arity) for c, (t, idx, arity) in self.ctors.items()
+                    if t == tname)
+        if [arity for _, _, arity in cs] != [0, 1]:
+            return n
+        zero, suc = cs[0][1], cs[1][1]
+        return A.Name(zero) if n.value == 0 else A.App(A.Name(suc), A.Num(n.value - 1))
 
 
 def _recursive(bodies: Dict[str, Tuple[Tuple[str, ...], A.Expr]], free_names) -> Set[str]:

@@ -121,8 +121,8 @@ def test_the_surface_UQ_is_the_artifacts_43_atom_unquoter(built, oracle):
 
 
 def test_three_is_the_artifacts_scott_numeral(built, oracle):
-    """`three = Suc (Suc (Suc Zero))`, written in the surface because the
-    calculus has no integer type (SYNTAX.md section 8)."""
+    """`three = Suc (Suc (Suc Zero))`, spelled as the artifact spells it;
+    the literal `3` is the same term (test_literals)."""
     e = built[("tower", "ascii")]
     assert pretty(e.term("three")) == pretty(oracle.natP(3))
 

@@ -273,6 +273,8 @@ class _Checker:
         if isinstance(e, A.Name):
             self.name(e.name, where, core, bound, macro)
             return
+        if isinstance(e, A.Num):
+            return                       # a numeral: closed, and names nothing
         if isinstance(e, A.App):
             head, args = _spine(e)
             self.eq_position(head, args, where, core, bound)
@@ -423,6 +425,11 @@ class _Checker:
         of the object type, or a level-0 name that is inlined and
         quoted; anything else names neither table."""
         obj = self.env.obj
+        if isinstance(e, A.Num):
+            self.add(DataError, where,
+                     f"the literal {e.value} inside a quotation: a numeral is "
+                     f"a level-0 value, and a quotation holds object terms")
+            return
         if isinstance(e, A.Scry):
             self.path_literal(e.path, where)
             if obj is not None and not any(c.name == "Scry"

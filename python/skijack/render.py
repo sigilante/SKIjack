@@ -79,6 +79,8 @@ class _Renderer:
     def expr(self, e, prec: int = 0) -> str:
         if isinstance(e, A.Name):
             return self.name(e.name)
+        if isinstance(e, A.Num):
+            return str(e.value)
         if isinstance(e, A.App):
             s = f"{self.expr(e.fn, 1)} {self.expr(e.arg, 2)}"
             return f"({s})" if prec >= 2 else s
