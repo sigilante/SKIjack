@@ -118,10 +118,10 @@ TOKS0 = ["TName", "TAxis", "TTypeDecl", "TCase", "TAssign", "TEq", "TAlt", "TLam
          "TSemi", "TLP", "TRP", "TLB", "TRB", "TLC", "TRC", "TNl", "TBad"]
 
 #: front1's: a signature's `:` and `->`, a macro's `:=*` and `:=!`, a
-#: quotation's `<` and `>`, `|-`, and fuel, `@n` or `@[]`
+#: quotation's `<` and `>`, `|-`, fuel, `@n` or `@[]`, and a literal
 TOKS1 = TOKS0[:-1] + ["TColon", "TArrow", "TMacro", "TCMacro", "TQOpen", "TQClose",
                       "TTurn", "TFuel", "TFuelE", "TScry", "TNsOpen", "TMapsTo", "TComma",
-                      "TSlash", "TGlue", "TBad"]
+                      "TSlash", "TGlue", "TNum", "TBad"]
 
 #: the tokens a predicate `isX` is written for
 TESTED0 = ["TTypeDecl", "TCase", "TAlt", "TDot", "TSemi", "TRP", "TRB", "TLC", "TRC", "TNl"]
@@ -139,7 +139,7 @@ def over_tokens(fn: str, each) -> str:
     """`fn t = t |> { ... }`, a branch per token constructor."""
     arms = []
     for k in TOKS:
-        binder = {"TName": " n", "TAxis": " n", "TFuel": " n"}.get(k, "")
+        binder = {"TName": " n", "TAxis": " n", "TFuel": " n", "TNum": " n"}.get(k, "")
         arms.append(f"{k}{binder} {each(k)}")
     return f"{fn} t = t |> {{ {' ; '.join(arms)} }}"
 
@@ -148,7 +148,7 @@ def token_tables() -> list:
     lines = [over_tokens("is" + k[1:], lambda x, k=k: "Yes" if x == k else "No") for k in TESTED]
     lines.append(over_tokens("atomStart", lambda x: "Yes" if x in
                              ("TName", "TAxis", "TLP", "TLB", "TLam", "TQOpen", "TScry",
-                              "TNsOpen") else "No"))
+                              "TNsOpen", "TNum") else "No"))
     lines.append(over_tokens("nameOf", lambda x: "(MName n)" if x == "TName" else "MNone"))
     lines.append(over_tokens("depthKind", lambda x: {"TLP": "DOpen", "TLB": "DOpen", "TLC": "DOpen",
                                                      "TQOpen": "DOpen", "TNsOpen": "DOpen",

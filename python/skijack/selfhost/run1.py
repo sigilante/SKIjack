@@ -7,8 +7,8 @@
 front1 is the self-hosted front end for the whole of SKIjack, built in
 milestones (avon docs/WORKLIST.md, Stage 8): M1 cores, macros,
 signatures and the Tier 1 birds; M2 interpreter generation; M3
-quotation; M4 scries and namespace literals.  Its reference is the
-expander with checking off, `skijack.compile(text, check=False)`:
+quotation; M4 scries and namespace literals; then numeral literals.
+Its reference is the expander with checking off, `skijack.compile(text, check=False)`:
 checking only refuses, and never changes a term (DESIDERATA.md item 11),
 so the terms of every program the expander accepts are what front1 must
 give, hash for hash.  A term holding a name the expander left unresolved,
@@ -68,6 +68,7 @@ MILESTONES = {
            "interp-t3", "scry-wfn"),
     "M3": ("level1-flipa", "tower", "scry-wfq"),
     "M4": ("scry-ns", "scry-block", "parse-chars", "words-to-numbers"),
+    "Lit": ("literals",),
 }
 
 #: edges where aviary's environment, under the expander, decides: it
@@ -360,6 +361,39 @@ EDGES4: Dict[str, str] = {
 }
 
 
+#: numeral literals' edges: the number beside other tokens, in each form
+#: that holds an expression, and what a program's own names cannot change.
+#: Beside an object type a definition is named `lit`, not `f`: `f` is a
+#: binder interpreter generation writes, which is AVIARY's class
+EDGESL: Dict[str, str] = {
+    "a literal": _H + "f := 3\n",
+    "a literal zero": _H + "f := 0\n",
+    "a literal of two digits": _H + "f := 12\n",
+    "a literal with no declared numeral": "f := 2\ng := suc 4\n",
+    "a literal at the end of the text": _H + "f := 3",
+    "a literal applied": _H + "f := 2 Suc Zero\n",
+    "a literal as an argument": _H + "f := Suc 4\n",
+    "a literal before a name, unspaced": _H + "f := Suc 3x\nx := Zero\n",
+    "a literal before a bracket, unspaced": _H + "f := Suc 3(Zero)\n",
+    "a literal before a prime": _H + "f := 3'\n",
+    "a literal picked": _H + "f := 2@[1 2]\n",
+    "a literal in a cell": _H + "f := [1 2 3]\n",
+    "a literal in a case": _H + "f n = n |> { Zero 1 ; Suc m 0 }\n",
+    "a literal scrutinized": _H + "f := 2 |> { Zero 1 ; Suc m m }\n",
+    "a literal in a lambda": _H + "f := \\x. 5\n",
+    "a literal in a core": _H + "c := {\n  f n = n |> { Zero 1 ; Suc m (f m) }\n}\n",
+    "a literal through a macro": _H + "m x :=* Suc x\nf := m 2\n",
+    "a macro of a literal": _H + "three :=* 3\nf := Suc three\n",
+    "a literal and the numeral operations": _H + "f := natAdd 2 3\ng := natIfEq 1 1 Yes No\n",
+    "a literal beside suc redefined": _H + "suc n = n\nzero := I\nf := 2\n",
+    "a literal beside Suc's own type": "n2 === Z2 | S2 n2\nf := S2 3\n",
+    "a literal of 200": _H + "f := 200\n",
+    "a literal quoted": _Q + "d := <K 2>\nlit := 2\n",
+    "a literal as fuel's neighbour": _Q + "r := <K I>@3\nlit := 3\n",
+    "a literal in a fact": _B + "rz := ns{/nat => <I>}\nlit := 3\n",
+}
+
+
 def _program1(rng: random.Random) -> str:
     """A random M1 program: macros, cores and equations over three types.
     Binder names come from a small pool, so that substitution must rename
@@ -632,7 +666,7 @@ def main(argv=None) -> int:
                 fail += 1
     if a.edges:
         bad = deferred = 0
-        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4}
+        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL}
         for what, text in edges.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why and what in AVIARY:
