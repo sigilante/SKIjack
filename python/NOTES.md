@@ -28,7 +28,7 @@ decisions below, is `SPEC.md` there.
   trees*; application is left-associative; the two documented parsing
   decisions behave as specified, including a clear error on an
   undeclared constructor in a case branch.
-* `tests/test_roundtrip.py` — for each of the 21 corpus programs `S` in
+* `tests/test_roundtrip.py` — for each of the 22 corpus programs `S` in
   lexicon `L`: `parse_L(render_L(parse_L(S))) == parse_L(S)`;
   `parse_M(render_M(parse_L(S))) == parse_L(S)` for the other lexicon
   `M`; `render_L` is idempotent on text; and a there-and-back trip

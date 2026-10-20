@@ -665,8 +665,10 @@ class _Types:
                 continue
             if len(numerals) > 1:
                 self.add(site, f"the literal {n} could be any of "
-                               f"{', '.join(numerals)}; its context must say "
-                               f"which")
+                               f"{', '.join(numerals)}; a signature does not "
+                               f"choose, so put it where its context fixes the "
+                               f"type, as the argument of that type's "
+                               f"successor, or spell it with the constructors")
                 continue
             try:
                 self.unify(r, TCon(numerals[0] if numerals else "fuel"))

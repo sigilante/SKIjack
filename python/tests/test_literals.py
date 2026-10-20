@@ -117,6 +117,11 @@ def test_fuel_and_picks_keep_their_numbers():
     assert parse_expr_text("3@p 3") == A.App(A.Pick(3, A.Name("p")), A.Num(3))
 
 
+def test_a_literal_is_read_in_base_ten():
+    assert parse_expr_text("007") == A.Num(7)
+    assert parse_expr_text("10") == A.Num(10)
+
+
 def test_a_literal_is_outside_skijack_0():
     assert in_subset(parse(NAT + "x = 1\n", "ascii")) == "Num"
 
@@ -143,6 +148,7 @@ def test_with_two_numeral_types_the_context_must_say_which():
     assert _stage_b(two + "x = Suc 3\ny = S2 3\nz = natAdd x 1\n") == []
     (msg,) = _stage_b(two + "x = 3\n")
     assert "could be any of nat, n2" in msg
+    assert "a signature does not choose" in msg
 
 
 def test_a_literal_where_another_type_is_expected_is_refused():

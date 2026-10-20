@@ -71,7 +71,8 @@ ASCII digits so both lexicons denote the same tree. A subscript cannot
 start an identifier, which keeps subscript fuel unambiguous. A
 capitalized identifier is a constructor name (CNAME).
 
-**Numbers** are decimal digits `[0-9]+` in both lexicons. A number
+**Numbers** are decimal digits `[0-9]+` in both lexicons, read in base
+ten, so `007` is `7` (`test_literals::test_a_literal_is_read_in_base_ten`). A number
 followed by the axis mark is an axis (`2@p`, `2⊑p`); fuel is `@n` in
 ASCII and subscript digits in Unicode; any other number is a numeral
 literal (§4).
@@ -231,13 +232,15 @@ type variables and type applications are not spellable in one
 - **Booleans** are `K` for yes and `K I` for no.
 - **Numerals** are Scott numerals. A literal `n` is the numeral
   `suc (suc … zero)` with `n` applications, built from the prelude's own
-  terms `K` and `S (K K) (S (K (S I)) K)`: the constructors of every type
-  declared `Zero | Suc t`, so `3` and `Suc (Suc (Suc Zero))` compile to
+  terms `K` and `S (K K) (S (K (S I)) K)`. Those are the constructors of
+  every *numeral type* — a declared type of two constructors, the first
+  with no fields and the second with one field of the type itself,
+  whatever their names — so `3` and `Suc (Suc (Suc Zero))` compile to
   the same term (`test_literals::test_a_literal_compiles_to_its_hand_spelled_twin`).
   A program that defines its own `zero` or `suc` does not change what a
   literal means (`test_literals::test_a_program_that_defines_suc_does_not_change_a_literal`).
-  The corpus program `literals` writes words-to-numbers' case with
-  literals and compiles to its 58-atom term
+  The corpus program `literals` writes words-to-numbers' case `toNum`
+  with literals, and `toNum` compiles to the same 58-atom term
   (`test_examples::test_literals_compile_to_the_numerals_they_spell`).
   A literal is unary: `n` costs `8n + 1` atoms, so `200` is 1,601. Stage
   B gives a literal its type (§9b); a literal inside a quotation is
@@ -541,7 +544,10 @@ error (`test_types::test_a_function_is_not_a_datum`).
   group leaves open defaults to the one declared numeral type, or to
   `fuel` if the program declares none, and with two declared it is an
   error that asks the context to say which
-  (`test_literals::test_with_two_numeral_types_the_context_must_say_which`).
+  (`test_literals::test_with_two_numeral_types_the_context_must_say_which`):
+  the literal must stand where its context fixes the type, as the
+  argument of that type's successor (`S2 3`), or be spelled with the
+  constructors.
   Defaulting happens before the group is generalized, so `inc x =
   natAdd x 1` is `nat -> nat`, never polymorphic
   (`test_literals::test_a_definition_is_not_polymorphic_in_a_literal`).

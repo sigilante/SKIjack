@@ -35,9 +35,10 @@ class Name:
 @dataclass(frozen=True)
 class Num:
     """``5``: a numeral literal.  It denotes the Scott numeral
-    ``suc (suc (suc (suc (suc zero))))`` of any type declared
-    ``Zero | Suc t``, built from the prelude's terms whatever a program
-    calls its own ``zero`` and ``suc``.  Kept as a node, not desugared
+    ``suc (suc (suc (suc (suc zero))))`` of any numeral type -- two
+    constructors, the first with no fields, the second with one of the
+    type itself, whatever their names -- built from the prelude's terms
+    whatever a program calls its own ``zero`` and ``suc``.  Kept as a node, not desugared
     here, so a rendered program spells it as it was written."""
     value: int
 
