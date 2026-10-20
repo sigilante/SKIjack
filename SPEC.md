@@ -72,10 +72,10 @@ start an identifier, which keeps subscript fuel unambiguous. A
 capitalized identifier is a constructor name (CNAME).
 
 **Numbers** are decimal digits `[0-9]+` in both lexicons, read in base
-ten, so `007` is `7` (`test_literals::test_a_literal_is_read_in_base_ten`). A number
-followed by the axis mark is an axis (`2@p`, `2⊑p`); fuel is `@n` in
-ASCII and subscript digits in Unicode; any other number is a numeral
-literal (§4).
+ten, so `007` is `7` (`test_literals::test_a_literal_is_read_in_base_ten`).
+A number followed by the axis mark is an axis (`2@p`, `2⊑p`); fuel is
+`@n` in ASCII and subscript digits in Unicode; any other number is a
+numeral literal (§4).
 
 **Maximal munch:** `:=*`/`:=!` before `:=`; `===` and `=>` before `=`;
 `|>`/`|-` before `|` (`test_lexicon::test_maximal_munch_ascii`). In ASCII
