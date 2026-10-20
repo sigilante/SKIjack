@@ -42,8 +42,9 @@ skijack FILE --run NAME [--fuel N]   # run a level-1 declaration and decode it
 ```
 
 The lexicon is taken from the filename (`*.unicode.ski`) unless
-`--lexicon` says otherwise. The seventeen programs of the conformance
-corpus ship with the package:
+`--lexicon` says otherwise. The twenty-two programs of the conformance
+corpus ship with the package; eighteen compile, and Stage A refuses the
+other four for stated reasons:
 
 ```python
 >>> import skijack

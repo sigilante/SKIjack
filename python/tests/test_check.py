@@ -28,6 +28,16 @@ COMPILABLE = tuple(EXPANDABLE) + tuple(INTERPRETERS) + (
 #: interpreter), so Stage A rejects them, which is itself the point
 PARSE_ONLY = ("misc-forms", "sec4-interp", "sec5-lookup", "syntax3-resolver")
 
+
+
+def test_the_corpus_is_the_compilable_and_the_parse_only_files():
+    """The counts corpus/__init__.py and the README state: 22 programs,
+    18 compiled and 4 refused."""
+    from skijack import corpus
+    assert set(COMPILABLE) | set(PARSE_ONLY) == set(corpus.names())
+    assert (len(corpus.names()), len(COMPILABLE), len(PARSE_ONLY)) == (22, 18, 4)
+
+
 NAT = "nat === Zero | Suc nat\n"
 TERM = "term === S | K | I | App term term\n"
 MAYBE = "maybe === Nothing | Just term\n"
