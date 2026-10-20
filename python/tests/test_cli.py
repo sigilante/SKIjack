@@ -55,6 +55,14 @@ def test_the_package_exposes_the_pipeline():
 
 # ------------------------------------------------------------- the CLI
 
+def test_check_knows_the_numeral_operations_a_program_names():
+    """`--check` installs what the compiler installs: `natAdd` and the
+    rest, when a program names one without defining it."""
+    code, out, err = run("--check", str(CORPUS / "literals.ascii.ski"))
+    assert code == 0, err
+    assert "Stage A clean" in out and "Stage B clean" in out
+
+
 def test_summary_is_the_default():
     code, out, _ = run(WHNFF)
     assert code == 0

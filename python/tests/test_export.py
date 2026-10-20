@@ -91,8 +91,8 @@ def test_the_dictionary_export():
     hash, the fixpoint among them, every name resolving to a row.  Avon's
     tests/test_jets.c recomputes every hash from its printed term."""
     rows, names = dictionary()
-    assert len(rows) == 282
-    assert len(names) == 868
+    assert len(rows) == 286         # literals added answer, five, isSix, natIfEq
+    assert len(names) == 891
     from aviary_kernel.abstraction import expand
     from aviary_kernel.environment import Environment
     y = structural_hash(expand(Atom("Y"), Environment()))

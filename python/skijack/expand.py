@@ -45,7 +45,8 @@ from .generate import (AnswerType, ObjectType, PathType, find_answer_type,
 from .check import check as _check
 from .quote import Encoder, level1_names
 
-__all__ = ["ExpandError", "Expansion", "expand_program", "PRELUDE_NAMES", "NAT_NAMES",
+__all__ = ["ExpandError", "Expansion", "expand_program", "program_prelude",
+           "PRELUDE_NAMES", "NAT_NAMES",
            "ISA_NAMES", "Level1Program", "FUEL_PLACEHOLDER"]
 
 #: the free atom that stands in for elided fuel, ``<t>@[]`` -- the
@@ -116,6 +117,17 @@ def _mentions(x, out: Set[str]) -> Set[str]:
         elif hasattr(y, "__dataclass_fields__"):
             stack.extend(getattr(y, f) for f in y.__dataclass_fields__)
     return out
+
+
+def program_prelude(program: A.Program) -> Tuple[str, ...]:
+    """The names installed before ``program`` is seen: the prelude, then
+    the numeral operations it names without defining.  The checkers take
+    this list, so a program that names ``natAdd`` checks as it compiles."""
+    defined = {d.name for d in program.decls
+               if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
+    mentioned = _mentions(program.decls, set())
+    return PRELUDE_NAMES + tuple(n for n in NAT_NAMES
+                                 if n in mentioned and n not in defined)
 
 
 def free_names(e: A.Expr) -> Set[str]:
@@ -625,12 +637,8 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     if env is None:
         env = Environment()
     _counter["n"] = 0
-    # the numeral operations the program names without defining
-    defined = {d.name for d in program.decls
-               if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
-    mentioned = _mentions(program.decls, set())
-    nat_ops = tuple(n for n in NAT_NAMES if n in mentioned and n not in defined)
-    prelude = PRELUDE_NAMES + nat_ops
+    prelude = program_prelude(program)
+    nat_ops = prelude[len(PRELUDE_NAMES):]
     if check:
         _check(program, prelude)
     if generate_forms:

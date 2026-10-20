@@ -51,6 +51,27 @@ def test_words_to_numbers_namespace_at_level_1(lx):
     assert render_ascii(decode(fields[0], p.object_type, max_steps=5_000_000)).startswith("K (S (K (S I)) K")
 
 
+# ------------------------------------------------------- numeral literals
+
+@pytest.mark.parametrize("lx", LEXICONS)
+def test_literals_compile_to_the_numerals_they_spell(lx):
+    """words-to-numbers' case, written with literals, is its term."""
+    e = build("literals", lx)
+    w = build("words-to-numbers", lx)
+    assert e.terms["toNum"] == w.terms["toNum"]
+    assert e.terms["three"] == w.terms["three"]
+    assert (e.sizes["toNum"], e.sizes["answer"]) == (58, 423)
+
+
+@pytest.mark.parametrize("lx", LEXICONS)
+def test_literals_run_to_their_values(lx):
+    e = build("literals", lx)
+    p = Prober(e)
+    assert [p.read_nat(e.terms[n]) for n in ("three", "answer", "five")] == [3, 42, 5]
+    assert yes_or_no(App(e.terms["isSix"], e.terms["five"])) == "no"
+    assert yes_or_no(App(e.terms["isSix"], App(e.terms["Suc"], e.terms["five"]))) == "yes"
+
+
 # ---------------------------------------------- full ASCII as a type; digits
 
 @pytest.mark.parametrize("lx", LEXICONS)

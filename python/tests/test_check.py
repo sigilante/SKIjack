@@ -12,7 +12,7 @@ from aviary_kernel.terms import pretty
 from skijack.check import (ArityError, CaseError, CheckError, DataError,
                            InterfaceError, ScopeError, SymbolTableError,
                            check, check_program)
-from skijack.expand import PRELUDE_NAMES, expand_program
+from skijack.expand import PRELUDE_NAMES, expand_program, program_prelude
 from skijack.parser import parse, parse_ascii
 
 from conftest import ALL_SOURCES, EXPANDABLE, INTERPRETERS, source
@@ -20,7 +20,8 @@ from conftest import ALL_SOURCES, EXPANDABLE, INTERPRETERS, source
 #: the corpus files the compiler handles end to end
 COMPILABLE = tuple(EXPANDABLE) + tuple(INTERPRETERS) + (
     "level1-flipa", "tower", "scry-wfq", "scry-wfn", "scry-ns", "scry-block",
-    "parse-chars", "words-to-numbers", "ascii-digits", "kernel-events")
+    "parse-chars", "words-to-numbers", "ascii-digits", "kernel-events",
+    "literals")
 
 #: the rest are parse-only: they use forms the notes describe and this
 #: package does not compile (wings, segment payloads, an undeclared
@@ -35,7 +36,8 @@ BOOL = "bool === PTrue | PFalse\nEQ a b = PTrue\n"
 
 
 def problems(src, lexicon="ascii"):
-    return check_program(parse(src, lexicon), PRELUDE_NAMES)
+    program = parse(src, lexicon)
+    return check_program(program, program_prelude(program))
 
 
 def rejects(src, kind, match):

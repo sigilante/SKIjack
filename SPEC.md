@@ -236,6 +236,9 @@ type variables and type applications are not spellable in one
   the same term (`test_literals::test_a_literal_compiles_to_its_hand_spelled_twin`).
   A program that defines its own `zero` or `suc` does not change what a
   literal means (`test_literals::test_a_program_that_defines_suc_does_not_change_a_literal`).
+  The corpus program `literals` writes words-to-numbers' case with
+  literals and compiles to its 58-atom term
+  (`test_examples::test_literals_compile_to_the_numerals_they_spell`).
   A literal is unary: `n` costs `8n + 1` atoms, so `200` is 1,601. Stage
   B gives a literal its type (§9b); a literal inside a quotation is
   refused (§9), since a numeral is a level-0 value.
