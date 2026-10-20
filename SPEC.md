@@ -218,7 +218,11 @@ type variables and type applications are not spellable in one
   (`test_expand::test_axis_chain_follows_nocks_numbering`). A term's
   application tree is code and cannot be addressed.
 - **The prelude** is `pair`, `hd`, `tl`, `nil`, `cons`, `zero`, `suc`.
-  A program that defines one of these replaces the prelude's.
+  A program that defines one of these replaces the prelude's for the
+  program's own uses of the name. The numeral operations, fuel and
+  literals always count with the prelude's `zero` and `suc`
+  (`test_nat::test_a_program_s_own_suc_and_zero_do_not_reach_the_operations`,
+  `test_level1::test_a_program_s_own_suc_does_not_change_its_fuel`).
 - **Numeral operations** join the prelude only in a program that names
   one without defining it (`expand.NAT_NAMES`), so no other program's
   terms change: `natAdd`, `natSub` (truncated at zero) and `natMul` on
@@ -326,8 +330,15 @@ none, and a proof of a poke carries its whole event as private witness
 
 Names resolve in a compile-time table and are gone before anything runs.
 A binder of the enclosing equation (or a core parameter) shadows
-everything, since it stays a variable until bracket abstraction removes
-it. Otherwise a name resolves, in this order: `S`, `K`, `I` to the ISA,
+everything but `S`, `K` and `I`, since it stays a variable until bracket
+abstraction removes it, whatever program name shares its spelling and
+wherever that name is declared
+(`test_expand::test_a_binder_is_never_a_program_name`). A binder named
+`S`, `K` or `I` could never be used, so it is refused, by Stage A and by
+the expander (`test_expand::test_a_binder_named_S_K_or_I_is_refused`).
+A binder list that repeats a name binds its last occurrence, `f x x = x`
+being `f y x = x` (`test_expand::test_a_repeated_binder_binds_its_last_occurrence`).
+Otherwise a name resolves, in this order: `S`, `K`, `I` to the ISA,
 unconditionally; then a sibling equation of the enclosing core; then a
 program-level name — declarations and the prelude share one namespace,
 and a program's own definition of a prelude name replaces the prelude's;

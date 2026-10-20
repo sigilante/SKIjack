@@ -162,18 +162,13 @@ def test_capturing_macro_is_refused_clearly():
 
 
 def test_macro_substitution_avoids_capture():
-    """``apply`` binds ``x`` inside; handing it an argument that mentions
-    ``x`` must not capture it."""
-    e = expand_program(parse_ascii(
-        "nat === Zero | Suc nat\n"
-        "useb f = f |> { Zero Zero ; Suc x f }\n"
-        "mac f :=* useb f\n"
-        "g x = mac x\n"))
-    direct = expand_program(parse_ascii(
-        "nat === Zero | Suc nat\n"
-        "useb f = f |> { Zero Zero ; Suc x f }\n"
-        "g x = useb x\n"))
-    assert pretty(e.term("g")) == pretty(direct.term("g"))
+    """The macro's body binds ``x``; handing it an argument that mentions
+    ``x`` must not capture it: ``m x`` is ``\\x'. x x'``, not ``\\x. x x``."""
+    e = expand_program(parse_ascii("m f :=* \\x. f x\ng x = m x\n"))
+    direct = expand_program(parse_ascii("h y = \\z. y z\n"))
+    captured = expand_program(parse_ascii("h y = \\z. z z\n"))
+    assert e.term("g") == direct.term("h")
+    assert e.term("g") != captured.term("h")
 
 
 def test_unresolved_name_is_an_error():
@@ -253,6 +248,58 @@ def test_an_arm_may_shadow_a_builtin_bird_name():
     e = expand_program(parse_ascii("C f x y = f y x\n"))
     assert e.backend["C"] == "Cc"
     assert e.size("C") == 10
+
+
+def _nat_of(e, name):
+    import sys
+    from skijack.probe import Prober
+    old = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(old, 100_000))
+    try:
+        return Prober(e).read_nat(e.terms[name])
+    finally:
+        sys.setrecursionlimit(old)
+
+
+_NAT = "nat === Zero | Suc nat\n"
+_ADD = "add m n = n |> { Zero m ; Suc k (Suc (add m k)) }\n"
+
+
+@pytest.mark.parametrize("src,name,want", [
+    (_NAT + "r := (\\g. g) (Suc Zero)\ng := Zero\n", "r", 1),
+    (_NAT + "g := Zero\nr := (\\g. g) (Suc Zero)\n", "r", 1),
+    (_NAT + "p n = n |> { Zero Zero ; Suc g g }\ng = Suc (Suc Zero)\nq := p (Suc Zero)\n", "q", 0),
+    (_NAT + "f g = g\nr := f (Suc Zero)\ng := Zero\n", "r", 1),
+    (_NAT + _ADD + "f x y = y\nt := add 2 3\n", "t", 5),
+    (_NAT + "ev n = n |> { Zero Zero ; Suc k (od k) }\n"
+            "od n = n |> { Zero (Suc Zero) ; Suc k (ev k) }\ng = Suc (Suc Zero)\nt := ev 3\n", "t", 1),
+    (_NAT + "t := Suc Zero\nc1 := K\nf0 := I\n", "t", 1),
+], ids=["lambda, global after", "lambda, global before", "branch, global after",
+        "equation binder, global after", "a recursion's own parameter",
+        "a group's own parameter", "a constructor's binders"])
+def test_a_binder_is_never_a_program_name(src, name, want):
+    """A binder shadows everything (SPEC.md §5), whichever program name
+    shares its spelling and wherever that name is defined: aviary expands
+    a rule body's defined names before abstracting its formals, so the
+    expander gives every formal a name no source can spell."""
+    assert _nat_of(expand_program(parse_ascii(src)), name) == want
+
+
+def test_a_repeated_binder_binds_its_last_occurrence():
+    e = expand_program(parse_ascii(_NAT + "f x x = x\nt := f Zero (Suc Zero)\n"
+                                   "m x :=* \\y. \\y. x\ng z = m z\nu := g 1 2 3\n"))
+    assert (_nat_of(e, "t"), _nat_of(e, "u")) == (1, 1)
+
+
+@pytest.mark.parametrize("src", ["f S = S\n", "f x = \\K. x\n",
+                                 _NAT + "f n = n |> { Zero Zero ; Suc I I }\n"])
+def test_a_binder_named_S_K_or_I_is_refused(src):
+    """S, K and I always name the ISA, so such a binder could never be
+    used; both checks and the unchecked expander refuse it by name."""
+    with pytest.raises(ScopeError, match="a binder named"):
+        expand_program(parse_ascii(src))
+    with pytest.raises(ExpandError, match="a binder named"):
+        expand_program(parse_ascii(src), check=False)
 
 
 def test_every_output_term_is_closed_over_S_K_I(built):

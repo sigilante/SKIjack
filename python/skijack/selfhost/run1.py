@@ -23,8 +23,7 @@ as the later assignment does in expand.py.
 - `--corpus`: every program in python/skijack/corpus, reporting which
   agree; `--expect M` fails unless milestone M's programs all agree.
 - `--edges`: run0's edge programs and each milestone's, against the full
-  reference; where aviary's environment decides (AVIARY), the difference
-  is M5's.
+  reference.
 - `--random N`: run0's random SKIjack-0 programs.
 - `--random1 N`: random programs of the full language: macros, cores,
   birds, object types and their interpreter cores, datums and level-1
@@ -70,18 +69,6 @@ MILESTONES = {
     "M4": ("scry-ns", "scry-block", "parse-chars", "words-to-numbers"),
     "Lit": ("literals",),
 }
-
-#: edges where aviary's environment, under the expander, decides: it
-#: refuses a binder named as a defined name or a built-in, a binder twice
-#: and a recursion's name rebound, and reads a binder named as a later
-#: definition as the definition.  front1 takes each binder as a binder.
-#: Stage A does not classify these; they are M5's (refusal parity)
-AVIARY = frozenset((
-    "a binder named as an equation", "an equation's own name its binder",
-    "a lambda shadowing a recursion", "a branch shadowing a recursion",
-    "a binder twice", "a lambda capturing a binder twice", "a member shadowed",
-    "a bird bound", "natAdd a binder", "a macro's binders twice",
-    "a binder named as a later definition", "a definition named as a generated binder"))
 
 #: identity macros: m_k makes 2^(k+1) - 1 substitutions and leaves its
 #: argument, so a sum of them meets the 200,000-substitution limit exactly
@@ -361,10 +348,28 @@ EDGES4: Dict[str, str] = {
 }
 
 
+#: binders against program names: a binder is a binder whatever program
+#: name shares its spelling and wherever that name is defined, the
+#: expander's own parameters included; and the numeral operations and fuel
+#: count with the prelude's numerals whatever the program calls `suc`
+_ADD = "add m n = n |> { Zero m ; Suc k (Suc (add m k)) }\n"
+EDGESB: Dict[str, str] = {
+    "a lambda's binder named as a later definition": _H + "r := (\\g. g) (Suc Zero)\ng := Zero\n",
+    "a lambda's binder named as an earlier definition": _H + "g := Zero\nr := (\\g. g) (Suc Zero)\n",
+    "a branch's binder named as a later definition":
+        _H + "p n = n |> { Zero Zero ; Suc g g }\ng = Suc (Suc Zero)\nq := p (Suc Zero)\n",
+    "a recursion beside a definition named f": _H + _ADD + "f x y = y\nt := add (Suc Zero) Zero\n",
+    "a group beside a definition named g":
+        _H + "ev n = n |> { Zero Yes ; Suc k (od k) }\nod n = n |> { Zero No ; Suc k (ev k) }\n"
+             "g = Suc (Suc Zero)\n",
+    "a constructor's binders named as definitions": _H + "t := Suc Zero\nc1 := K\nf0 := I\n",
+    "the numeral operations beside suc redefined":
+        _H + "suc n = n\nzero := I\nt := natAdd 1 1\nm := natMul 2 0\ns := natSub 1 3\n",
+    "fuel beside suc redefined": _Q + "suc n = n\nzero := I\nr := <K I>@3\n",
+}
+
 #: numeral literals' edges: the number beside other tokens, in each form
-#: that holds an expression, and what a program's own names cannot change.
-#: Beside an object type a definition is named `lit`, not `f`: `f` is a
-#: binder interpreter generation writes, which is AVIARY's class
+#: that holds an expression, and what a program's own names cannot change
 EDGESL: Dict[str, str] = {
     "a literal": _H + "f := 3\n",
     "a literal zero": _H + "f := 0\n",
@@ -500,9 +505,8 @@ def _program2(rng: random.Random) -> str:
     tops = [l.split()[0] for l in lines if l.startswith("e") and " = " in l]
     datums: List[str] = []
 
-    # binders are fresh, as a binder twice in one chain is aviary's refusal
-    # (AVIARY); a nested quotation names no datum, as each level of quoting
-    # multiplies a datum's size
+    # binders are fresh; a nested quotation names no datum, as each level
+    # of quoting multiplies a datum's size
     def qexpr(scope, depth, outer=True):
         r = rng.random()
         if depth <= 0 or r < 0.35:
@@ -529,18 +533,6 @@ def _program2(rng: random.Random) -> str:
             interp = "whnfF |- " if rng.random() < 0.3 or not fuel else ""
             lines.append(f"lr{i} := {interp}<{qexpr([], 2)}>{fuel}")
     return "\n".join(lines) + "\n"
-
-
-def aviary_refuses(text: str) -> bool:
-    """Whether the expander's refusal is aviary's environment's (AVIARY)."""
-    try:
-        with Deep():
-            skijack.compile(text, lexicon="ascii", check=False)
-    except (DefinitionError, ExpansionError):
-        return True
-    except SkijackError:
-        return False
-    return False
 
 
 Result = Optional[Dict[str, str]]
@@ -665,17 +657,14 @@ def main(argv=None) -> int:
                 print(f"FAIL {a.expect}: {missing} do not agree")
                 fail += 1
     if a.edges:
-        bad = deferred = 0
-        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL}
+        bad = 0
+        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB}
         for what, text in edges.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))
-            if why and what in AVIARY:
-                deferred += 1
-            elif why:
+            if why:
                 print(f"  edge {what}: {why}")
                 bad += 1
-        print(f"edges: {len(edges) - bad - deferred} of {len(edges)} as the expander has them, "
-              f"{deferred} of aviary's left to M5")
+        print(f"edges: {len(edges) - bad} of {len(edges)} as the expander has them")
         fail += bad
     if a.random:
         sys.path.insert(0, str(HERE.parent.parent / "tests"))
@@ -690,7 +679,7 @@ def main(argv=None) -> int:
         print(f"random: {a.random - bad} of {a.random} agree")
         fail += bad
     if a.random1:
-        rng, bad, deferred, accepted = random.Random(a.seed), 0, 0, 0
+        rng, bad, accepted = random.Random(a.seed), 0, 0
         for i in range(a.random1):
             text = _program2(rng)
             ref = reference(text)
@@ -699,13 +688,11 @@ def main(argv=None) -> int:
             except RuntimeError as e:
                 why = str(e)[:200]
             accepted += ref is not None
-            if why and ref is None and aviary_refuses(text):
-                deferred += 1
-            elif why:
+            if why:
                 print(f"FAIL random1 program {i}: {why}\n{text}")
                 bad += 1
-        print(f"random1: {a.random1 - bad - deferred} of {a.random1} agree "
-              f"({accepted} accepted by the expander), {deferred} of aviary's left to M5")
+        print(f"random1: {a.random1 - bad} of {a.random1} agree "
+              f"({accepted} accepted by the expander)")
         fail += bad
     if not a.no_fixed_point:
         t0 = time.time()

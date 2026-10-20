@@ -55,6 +55,7 @@ from .generate import (GenerateError, ObjectType, PathType, find_object_type,
 __all__ = [
     "CheckError", "ArityError", "CaseError", "DataError", "InterfaceError",
     "SymbolTableError", "ScopeError", "Problem", "check", "check_program",
+    "isa_binders",
 ]
 
 
@@ -155,6 +156,48 @@ class _Env:
                 or name in self.macros)
 
 
+def isa_binders(program: A.Program) -> List[Tuple[str, str]]:
+    """Every binder named ``S``, ``K`` or ``I``, as (where, name).  Those
+    names resolve to the ISA unconditionally (SPEC.md §5), so a binder of
+    one could never be used; it is refused rather than left dead."""
+    out: List[Tuple[str, str]] = []
+
+    def names(where: str, ns) -> None:
+        out.extend((where, n) for n in ns if n in _ISA)
+
+    def walk(where: str, x) -> None:
+        stack = [x]
+        while stack:
+            y = stack.pop()
+            if isinstance(y, A.Lambda):
+                names(where, (y.param,))
+            elif isinstance(y, A.Case):
+                for _c, bs, _b in y.branches:
+                    names(where, bs)
+            if isinstance(y, (list, tuple)):
+                stack.extend(y)
+            elif hasattr(y, "__dataclass_fields__"):
+                stack.extend(getattr(y, f) for f in y.__dataclass_fields__)
+
+    for d in program.decls:
+        if isinstance(d, A.Equation):
+            names(f"equation {d.name}", d.binders)
+            walk(f"equation {d.name}", d.body)
+        elif isinstance(d, A.Macro):
+            names(f"macro {d.name}", d.params)
+            walk(f"macro {d.name}", d.body)
+        elif isinstance(d, A.Core):
+            # a core's parameters are each equation's first binders, so a
+            # core with no equations binds nothing
+            for eq in d.equations:
+                names(f"equation {eq.name} of core {d.name}",
+                      tuple(d.params) + tuple(eq.binders))
+                walk(f"equation {eq.name} of core {d.name}", eq.body)
+        elif isinstance(d, A.Def):
+            walk(f"definition {d.name}", d.expr)
+    return out
+
+
 def _spine(e: A.Expr):
     args = []
     while isinstance(e, A.App):
@@ -227,6 +270,10 @@ class _Checker:
     # ------------------------------------------------------------- walk
 
     def run(self) -> List[Problem]:
+        for where, nm in isa_binders(self.program):
+            self.add(ScopeError, where,
+                     f"a binder named {nm!r}: S, K and I always name the "
+                     f"ISA (SPEC.md §5), so it could never be used")
         for d in self.program.decls:
             if isinstance(d, A.Equation):
                 self.expr(d.body, Site("equation", d.name), None, set(d.binders))
