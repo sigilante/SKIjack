@@ -442,6 +442,14 @@ leave the names to the combinators; and when two names share a term
     binder of the body that would capture a name free in the argument.
     That is what is implemented and tested; a real definition-site
     scope arrives with the standard library.
+    A binder is also hygienic against aviary: the host expands every
+    atom of a rule's body that names a defined combinator before it
+    abstracts the formals, so a formal spelled as a program name became
+    that name's definition, silently when the definition came later, and
+    `c1 := K` broke `Suc`. Every formal the expander gives aviary is
+    `\x00b:` plus the binder, a name no source can spell, and the
+    constructors' are `\x00f…` and `\x00c…`; abstraction removes them, so
+    no term changes but the miscompiled ones.
 
 13. **The object type is identified by shape, not by name.** It is the
     unique declared type with exactly one constructor carrying two fields

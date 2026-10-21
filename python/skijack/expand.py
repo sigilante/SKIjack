@@ -42,7 +42,7 @@ from . import ast as A
 from .generate import (AnswerType, ObjectType, PathType, find_answer_type,
                        find_loop_types, find_object_type, find_path_type,
                        generate as _generate)
-from .check import check as _check
+from .check import check as _check, isa_binders
 from .quote import Encoder, level1_names
 
 __all__ = ["ExpandError", "Expansion", "expand_program", "program_prelude",
@@ -536,6 +536,31 @@ class Expansion:
         return pretty(self.terms[name])
 
 
+#: the prefix of a binder's backend name.  aviary expands every atom of a
+#: rule's body that names a defined combinator, formals included, so a
+#: formal spelled as a source name would become that name's definition --
+#: silently, when the definition comes later.  No source program can
+#: spell the prefix, so a binder is only ever a binder; abstraction
+#: removes it, so no emitted term contains it.
+_BOUND = "\x00b:"
+
+
+def _bv(name: str) -> str:
+    """The backend name of the binder ``name``."""
+    return _BOUND + name
+
+
+def _formals(scope: Sequence[str]) -> Tuple[str, ...]:
+    """A rule's formals for a binder list: each binder's backend name, and
+    for a binder the list repeats, a dead name in each earlier place, so the
+    last occurrence binds (as ``skijack.inline`` and lean-ski's
+    ``overrideN`` read a repeated binder)."""
+    out = []
+    for i, x in enumerate(scope):
+        out.append(_bv(x) if x not in scope[i + 1:] else f"{_BOUND}{i}#{x}")
+    return tuple(out)
+
+
 class _Codegen:
     def __init__(self, env: Environment, resolve, helper_names=None, kinds=None):
         self.env = env
@@ -554,7 +579,7 @@ class _Codegen:
         """Compile ``e``; ``scope`` is the enclosing binder list in order."""
         if isinstance(e, A.Name):
             if e.name in scope:
-                return v(e.name)
+                return v(_bv(e.name))
             t = self.resolve(e.name)
             if t is None:
                 raise ExpandError(
@@ -582,12 +607,12 @@ class _Codegen:
         name = _fresh_name(f"{owner}_b", self.env, len(self.helper_names))
         inner_scope = list(captured) + params
         term = self.gen(body, inner_scope, owner)
-        self.env.define_rule(name, tuple(inner_scope), term)
+        self.env.define_rule(name, _formals(inner_scope), term)
         self.helper_names.append(name)
         self.kinds[name] = ("lift", owner)
         out: Term = a(name)
         for c in captured:
-            out = KApp(out, v(c))
+            out = KApp(out, v(_bv(c)))
         return out
 
 
@@ -641,6 +666,9 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     nat_ops = prelude[len(PRELUDE_NAMES):]
     if check:
         _check(program, prelude)
+    for where, nm in isa_binders(program):
+        raise ExpandError(f"a binder named {nm!r} in {where}: S, K and I "
+                          f"always name the ISA (SPEC.md §5)")
     if generate_forms:
         program = _generate(program)
     if check:
@@ -721,6 +749,11 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     # the numeral operations, each `op := Y opGen` with opGen taking itself
     # first, and a helper rule per case branch
     if nat_ops:
+        # the operations' own numerals: the prelude's terms under names no
+        # source can spell, so a program's own `suc` or `zero` does not
+        # reach them, as it does not reach a literal (SPEC.md §4)
+        env.define_alias("\x00suc", SUC_TERM)
+        env.define_alias("\x00zero", ZERO_TERM)
         _f, _m, _n, _k, _j = "\x00f", "\x00m", "\x00n", "\x00k", "\x00j"
         _xx, _yy = "\x00x", "\x00y"
         # a numeral's cases: m z s is z at zero and s j at j + 1
@@ -741,17 +774,17 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
         if "natAdd" in needed:
             _rules("natAdd", [                # m + 0 = m; m + (k+1) = (m + k) + 1
                 ("natAddGen", (_f, _m, _n), K_(v(_n), v(_m), K_(a("natAddS"), v(_f), v(_m)))),
-                ("natAddS", (_f, _m, _k), K_(a("suc"), K_(v(_f), v(_m), v(_k)))),
+                ("natAddS", (_f, _m, _k), K_(a("\x00suc"), K_(v(_f), v(_m), v(_k)))),
             ])
         if "natSub" in needed:
             _rules("natSub", [                # m - 0 = m; m - (k+1) = pred m - k
                 ("natSubGen", (_f, _m, _n), K_(v(_n), v(_m), K_(a("natSubS"), v(_f), v(_m)))),
                 ("natSubS", (_f, _m, _k),
-                 K_(v(_f), K_(v(_m), a("zero"), a("I")), v(_k))),
+                 K_(v(_f), K_(v(_m), a("\x00zero"), a("I")), v(_k))),
             ])
         if "natMul" in needed:
             _rules("natMul", [                # m * 0 = 0; m * (k+1) = m + m * k
-                ("natMulGen", (_f, _m, _n), K_(v(_n), a("zero"), K_(a("natMulS"), v(_f), v(_m)))),
+                ("natMulGen", (_f, _m, _n), K_(v(_n), a("\x00zero"), K_(a("natMulS"), v(_f), v(_m)))),
                 ("natMulS", (_f, _m, _k), K_(a("natAdd"), v(_m), K_(v(_f), v(_m), v(_k)))),
             ])
         if "natIfEq" in needed:
@@ -834,9 +867,9 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
     # --- the constructors, from the type declarations
     for tdecl in types.values():
         n = len(tdecl.ctors)
-        conts = [f"c{i}" for i in range(n)]
+        conts = [f"\x00c{i}" for i in range(n)]
         for idx, c in enumerate(tdecl.ctors):
-            fields = [f"f{i}" for i in range(len(c.fields))]
+            fields = [f"\x00f{i}" for i in range(len(c.fields))]
             body: Term = v(conts[idx])
             for f in fields:
                 body = KApp(body, v(f))
@@ -948,13 +981,13 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 gen_name = _mangle(bname + "Gen", used)
                 used.add(gen_name)
                 term = gen.gen(body, scope, bname)
-                env.define_rule(gen_name, tuple(scope), term)
+                env.define_rule(gen_name, _formals(scope), term)
                 kinds[gen_name] = ("rec", bname)
                 env.define_alias(bname, K_(a("Y"), a(gen_name)))
             else:
                 scope = list(equation.binders)
                 term = gen.gen(equation.body, scope, bname)
-                env.define_rule(bname, tuple(scope), term)
+                env.define_rule(bname, _formals(scope), term)
                 kinds[bname] = ("eq", bname)
             continue
         n = len(group)
@@ -1003,7 +1036,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                     return a(sels[int(nm[len("\x00sel"):])])
                 return resolver(_core)(nm)
             term = cg.with_resolver(resolve_in).gen(body, scope, _bname(key))
-            env.define_rule(code, tuple(scope), term)
+            env.define_rule(code, _formals(scope), term)
             kinds[code] = ("code", _bname(key))
             codes.append(code)
         gen_name = _mangle(gname + "Gen", used)
@@ -1202,7 +1235,7 @@ def expand_program(program: A.Program, env: Optional[Environment] = None,
                 name=d.name, interp=iname, interp_term=out.terms[iname],
                 datum=datum, fuel=q.fuel if q.fuel is not None else A.POLICY,
                 object_type=obj, result_type=lt.result,
-                zero=out.terms["zero"], suc=out.terms["suc"],
+                zero=ZERO_TERM, suc=SUC_TERM,
                 params=tuple(_ski_expand(t, env) for t in params))
             out.level1[d.name] = prog
             if isinstance(prog.fuel, int):

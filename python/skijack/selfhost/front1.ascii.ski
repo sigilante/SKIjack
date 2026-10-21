@@ -814,6 +814,9 @@ countN n ns = ns |> { NmNil Zero ; NmCons m r (eqId n m |> { Yes (Suc (countN n 
 bareAll ds = ds |> { DNil NmNil ; DCons d r (d |> { DCore n ps es (appN (bareAll es) (bareAll r)) ; DCEq c n rn bs x (NmCons n (bareAll r)) ; DEq n bs x (bareAll r) ; DDef n x (bareAll r) ; DType n cs fs (bareAll r) ; DMacro n ps c x (bareAll r) }) }
 coreP bn qn ds = ds |> { DNil PrNil ; DCons d r (d |> { DCore n ps es (appP (coreP bn qn es) (coreP bn qn r)) ; DCEq c n rn bs x (PrCons c c (andB (eqN (countN n bn) one) (notB (memN n qn)) |> { Yes (PrCons n c (coreP bn qn r)) ; No (coreP bn qn r) })) ; DEq n bs x (coreP bn qn r) ; DDef n x (coreP bn qn r) ; DType n cs fs (coreP bn qn r) ; DMacro n ps c x (coreP bn qn r) }) }
 loopP ls = ls |> { RnNil PrNil ; RnCons n c r (PrCons n c (loopP r)) }
+-- the prelude's successor as a term: the numeral operations and fuel
+-- use it, not the name `suc`, which a program may define for itself
+sucR := rapp (rapp RS (rapp RK RK)) (rapp (rapp RS (rapp RK (rapp RS RI))) RK)
 -- the numeral operations a program names and does not define, each `Y`
 -- of a generator taking itself first; expand.py's helper rules are
 -- inline here, and natMul's natAdd is always the prelude's
@@ -829,9 +832,9 @@ hasX n xs = xs |> { XNil No ; XCons x r (orB (hasE n x) (hasX n r)) }
 hasBs n bs = bs |> { BNil No ; BCons b r (b |> { Br c ns x (orB (hasE n x) (hasBs n r)) }) }
 five := Suc four
 rap4 f a b c d = rapp (rapp (rapp (rapp f a) b) c) d
-natAddR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp (RRef idSuc) (rapp (rapp (RIx Zero) (RIx one)) (RIx two))))) (RIx Zero)) (RIx one)))))
-natSubR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp (RIx Zero) (rapp (rapp (RIx one) (RRef idZero)) RI)) (RIx two)))) (RIx Zero)) (RIx one)))))
-natMulR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RRef idZero)) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp natAddR (RIx one)) (rapp (rapp (RIx Zero) (RIx one)) (RIx two))))) (RIx Zero)) (RIx one)))))
+natAddR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp sucR (rapp (rapp (RIx Zero) (RIx one)) (RIx two))))) (RIx Zero)) (RIx one)))))
+natSubR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp (RIx Zero) (rapp (rapp (RIx one) RK) RI)) (RIx two)))) (RIx Zero)) (RIx one)))))
+natMulR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) RK) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp natAddR (RIx one)) (rapp (rapp (RIx Zero) (RIx one)) (RIx two))))) (RIx Zero)) (RIx one)))))
 natIfT := RRule (Rule (dum five) (rapp (rapp (rapp (rapp (RIx Zero) (RIx three)) (RIx four)) (RIx one)) (RIx two)))
 natIfS := RRule (Rule (dum five) (rapp (rapp (RIx one) (RIx three)) (rap4 natIfT (RIx Zero) (RIx two) (RIx three) (RIx four))))
 natIfEqR := rapp yComb (RRule (Rule (dum five) (rapp (rapp (RIx one) (rapp (rapp (RIx two) (RIx three)) (rapp RK (RIx four)))) (rap4 natIfS (RIx Zero) (RIx two) (RIx three) (RIx four)))))
@@ -891,7 +894,7 @@ qnest qb qe ns = ns |> { QsNil (MNr NrNil) ; QsCons n b r (qb b |> { MRNone MNrF
 -- whnfF, applied to none whatever it takes
 coreInfo ds n = ds |> { DNil CINone ; DCons d r (d |> { DCore m ps es (eqId n m |> { Yes (CI2 (lenN ps) (loopOf es)) ; No (coreInfo r n) }) ; DEq m bs x (coreInfo r n) ; DDef m x (coreInfo r n) ; DType m cs fs (coreInfo r n) ; DMacro m ps c x (coreInfo r n) ; DCEq c m rn bs x (coreInfo r n) }) }
 headVar e = e |> { EVar n (MName n) ; EApp p (p |> { EAp f a (headVar f) }) ; ECell xs MNone ; EPick k x MNone ; ECase x bs MNone ; ELam x b MNone ; EQuote b fu i MNone ; EScry p MNone ; ENs fs MNone ; ENum k MNone }
-numR k = k |> { Zero (RRef idZero) ; Suc j (rapp (RRef idSuc) (numR j)) }
+numR k = k |> { Zero RK ; Suc j (rapp sucR (numR j)) }
 rappT t ts = ts |> { RtNil t ; RtCons a r (rappT (rapp t a) r) }
 qinterp x i = qinterp2 x (i |> { INone (QI idWhnfF Yes XNil) ; ISome e (headVar e |> { MNone QINone ; MName n (QI n No (spArgs e XNil)) }) })
 qinterp2 x q = q |> { QINone MRNone ; QI n dflt args (x |> { QX ms ct ys es0 eq rn qe dsc an ls bo l0 (qcore x dsc n dflt args) }) }

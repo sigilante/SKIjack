@@ -225,3 +225,18 @@ def test_a_level0_name_may_be_quoted_but_a_parameter_may_not():
     msg = " ".join(str(excinfo.value).split())
     assert "names neither table" in msg
     assert "not a level-0 name" in msg
+
+
+def test_a_program_s_own_suc_does_not_change_its_fuel():
+    """Fuel is the prelude's numeral whatever the program calls `suc`, so
+    a run of s contractions still needs fuel s + 1 (SPEC.md §6)."""
+    import pathlib
+    import skijack
+    from skijack.run import peel, run_level1
+    spec = (pathlib.Path(skijack.__file__).parents[2] / "SPEC.md").read_text()
+    src = spec.split("```skijack\n")[1].split("```")[0]
+    for text in (src, src + "suc n = Suc (Suc n)\n"):
+        p = skijack.compile(text).level1["answer"]
+        outs = [run_level1(p, fuel=k) for k in (1, 2)]
+        assert [peel(o.term, p.result_type)[0] for o in outs] == ["Nothing", "Just"]
+        assert outs[1].steps == 340

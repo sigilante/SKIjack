@@ -54,11 +54,8 @@ def test_the_front_end_compiles_with_checking():
     assert "front" in front().terms
 
 
-EDGES = {**run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4, **run1.EDGESL}
-
-
-def test_the_aviary_edges_are_edges():
-    assert run1.AVIARY <= set(run1.EDGES) | set(EDGES)
+EDGES = {**run1.EDGES, **run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4,
+         **run1.EDGESL, **run1.EDGESB}
 
 
 AVON = os.environ.get("AVON")
@@ -73,7 +70,7 @@ def test_a_corpus_program_compiles_as_the_expander_has_it(stem):
 
 
 @needs_avon
-@pytest.mark.parametrize("what", [w for w in EDGES if w not in run1.AVIARY])
+@pytest.mark.parametrize("what", list(EDGES))
 def test_an_edge_is_accepted_or_refused_as_the_expander_has_it(what):
     text = EDGES[what]
     assert run1.compare(run1.run_avon(AVON, text)[1], run1.reference(text)) == ""
@@ -86,7 +83,7 @@ def test_random_programs_compile_as_the_expander_has_them():
         text = run1._program2(rng)
         ref = run1.reference(text)
         why = run1.compare(run1.run_avon(AVON, text)[1], ref)
-        assert why == "" or (ref is None and run1.aviary_refuses(text)), text
+        assert why == "", text
 
 
 @needs_avon

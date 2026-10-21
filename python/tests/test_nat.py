@@ -108,3 +108,16 @@ def test_a_program_defining_its_own_operation_keeps_it(tmp_path):
     assert exp.rule_kinds.get("natAdd", ("",))[0] != "prelude"
     assert write_words(exp, tmp_path / "words.tsv") == 0
     assert not (tmp_path / "words.tsv").exists()
+
+
+def test_a_program_s_own_suc_and_zero_do_not_reach_the_operations():
+    """A program that defines `suc` or `zero` replaces the prelude's for
+    its own uses of the names; the operations count with the prelude's
+    numerals, as literals do (SPEC.md §4)."""
+    base = "x = natAdd (Suc Zero) (Suc Zero)\nm = natMul 2 0\ns = natSub 1 3\n"
+    own = _compile("suc n = n\nzero = I\n" + base)
+    ref = _compile(base)
+    env = Environment()
+    assert [_value(own.terms[n], env) for n in ("x", "m", "s")] == [2, 0, 0]
+    for op in ("natAdd", "natMul", "natSub"):
+        assert own.terms[op] == ref.terms[op]
