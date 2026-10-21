@@ -133,3 +133,76 @@ def test_problems_are_collected_then_raised_once():
     problems = typecheck_program(parse(NAT + "a := Suc K\nb := Suc I\n", "ascii"))
     assert [p.where.name for p in problems] == ["a", "b"]
     assert all(p.kind is TypeMismatchError for p in problems)
+
+
+# ------------------------------------------- what the review found (Wizard)
+
+@pytest.mark.parametrize("arg", ["(Zero W)", "(I (Zero W))", "(Zero (I W))",
+                                 "(Zero (B K))", "((I Zero) W)", "(Zero Zero)"])
+def test_a_datum_applied_short_of_its_continuations_is_a_function(arg):
+    """`Zero W` is `K W`, a function of one more argument: a datum applied
+    to fewer continuations than its type has constructors is never a datum
+    of that type, so Suc refuses it, as it refuses `Suc K`."""
+    refuses(NAT + f"t := Suc {arg}\n", "where a value of type nat is expected")
+
+
+def test_a_datum_applied_to_all_its_continuations_is_still_accepted():
+    skijack.compile(NAT + "f x = Suc (x Zero (\\k. k))\na := f Zero\n"
+                          "pred x = x Zero (\\k. k)\nb := Suc (pred (Suc Zero))\n")
+
+
+def test_one_use_of_a_name_does_not_commit_another():
+    """A monomorphic scheme is copied for each use: `f Zero` is refused and
+    `f I`, which is Suc Zero, is accepted, in either order."""
+    for order in ("a := f Zero\nb := f I\n", "b := f I\na := f Zero\n"):
+        problems = typecheck_program(parse(NAT + "f x = Suc (x Zero)\n" + order, "ascii"))
+        assert [p.where.name for p in problems] == ["a"]
+
+
+@pytest.mark.parametrize("body", ["natIfEq I I Zero Zero", "natAdd K Zero",
+                                  "natSub Zero (K I)"])
+def test_a_numeral_operation_refuses_a_function(body):
+    refuses(NAT + f"z := Suc ({body})\n",
+            "a function .* where a (numeral|value of type nat) is expected")
+
+
+def test_a_numeral_operation_refuses_other_data():
+    refuses(NAT + "bool === F | T\nc := natIfEq T F Zero (Suc Zero)\n",
+            "expected a numeral, found bool")
+
+
+def test_the_numeral_constraint_holds_through_an_alias_and_a_binder():
+    refuses(NAT + "add = natAdd\nz := Suc (add I I)\n", "where a numeral is expected")
+    refuses(NAT + "bool === F | T\ninc x = natAdd x 1\ny := inc T\n",
+            "expected (a numeral|nat), found bool")
+    refuses(NAT + "bool === F | T\ninc x = natAdd x x\ny := inc T\n",
+            "expected a numeral, found bool")
+    skijack.compile(NAT + "add = natAdd\ninc x = natAdd x 1\nz := Suc (add (inc 1) 2)\n")
+
+
+@pytest.mark.parametrize("use", ["eq = EQ\ng := eq K I\n", "ap e = e K I\ng := ap EQ\n",
+                                 "g := EQ [K I] [I K]\n", "g := EQ (cons K nil) nil\n"])
+def test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list(use):
+    refuses(NAT + "bool === F | T\nEQ x y = T\n" + use, "an operand of 'EQ' is a function")
+
+
+def test_EQ_on_data_through_an_alias_is_accepted():
+    skijack.compile(NAT + "bool === F | T\nEQ x y = T\neq = EQ\n"
+                          "g := eq [Zero Zero] (cons Zero nil)\n")
+
+
+def test_stage_b_refuses_what_it_cannot_settle_instead_of_crashing(monkeypatch):
+    """However a declaration's inference runs, Stage B ends in problems,
+    never a RecursionError (SPEC.md §9b)."""
+    import importlib
+    T = importlib.import_module("skijack.typecheck")
+    real = T._Types.unify
+
+    def deep(self, expected, given, seen=None):
+        if isinstance(T.resolve(expected), T.TCon) and T.resolve(expected).name == "nat":
+            raise RecursionError
+        return real(self, expected, given, seen)
+    monkeypatch.setattr(T._Types, "unify", deep)
+    problems = typecheck_program(parse(NAT + "t := Suc Zero\nu := I\n", "ascii"))
+    assert [p.where.name for p in problems] == ["t"]
+    assert "could not settle" in problems[0].message

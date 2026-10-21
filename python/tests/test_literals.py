@@ -1,5 +1,5 @@
 """Numeral literals (SPEC.md §4): ``5`` is the Scott numeral
-``suc (suc (suc (suc (suc zero))))`` of a type declared ``Zero | Suc t``.
+``suc (suc (suc (suc (suc zero))))`` of a numeral type.
 
 The tests hold the literal to its hand-spelled twin: the same terms,
 with and without the inliner, and the same value when run."""

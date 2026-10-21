@@ -510,7 +510,9 @@ codegen is expand-then-encode and quotes supercombinators by design.
 Stage B runs after generation and before codegen, over macro-expanded
 bodies, and like Stage A it collects every problem, raises once with
 class `TypeMismatchError`, rejects and never rewrites
-(`test_types::test_type_checking_never_changes_the_terms`). It is
+(`test_types::test_type_checking_never_changes_the_terms`). A declaration
+whose inference outruns the host's recursion limit is refused, never a
+crash (`test_types::test_stage_b_refuses_what_it_cannot_settle_instead_of_crashing`). It is
 Hindley–Milner over the declared sum types and function types, with one
 rule that is the whole discipline:
 
@@ -538,6 +540,13 @@ error (`test_types::test_a_function_is_not_a_datum`).
   order, and a function passed where either use expected a datum is
   refused in either order (`test_types::test_a_binder_used_as_case_then_as_datum_still_refuses_a_function`
   and its mirror).
+- **A datum applied short of its continuations is a function.** Only
+  the first arrow of a Scott spine is the datum's: `Zero W` is `K W`, a
+  function of one more argument, so `Suc (Zero W)` is refused as `Suc K`
+  is (`test_types::test_a_datum_applied_short_of_its_continuations_is_a_function`).
+  Each use of a name gets its own copy of the name's type, so one use
+  committing an arrow does not commit another
+  (`test_types::test_one_use_of_a_name_does_not_commit_another`).
 - **Recursion over a datum applied by hand yields a cyclic type**, and
   unification is equirecursive, so those are admitted — as is
   `omega = S I I (S I I)`, with no escape hatch
@@ -548,6 +557,10 @@ error (`test_types::test_a_function_is_not_a_datum`).
   marked may be bound to a sum type and never to a built arrow. That is
   how `f x = EQ x PTrue` with `g := f K` is refused although `x` is a
   bare binder (`test_types::test_an_operand_of_eq_may_not_be_a_function_through_a_binder`).
+  The constraint reaches into a cell's and a list's components, and a
+  program's `EQ` carries it in its own scheme, so it holds through an
+  alias (`eq = EQ`) and wherever `EQ` is passed
+  (`test_types::test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list`).
 - **Literals.** A literal is a numeral of a *numeral type*: a declared
   type with two constructors, the first with no fields and the second
   with one field of the type itself, or `fuel`, the prelude's numerals.
@@ -571,8 +584,12 @@ error (`test_types::test_a_function_is_not_a_datum`).
 - **The prelude and the ISA** have schemes: `pair : a -> b -> cell a b`,
   `hd`, `tl`, `nil : list a`, `cons`, `zero : fuel`, `suc`;
   `natAdd`, `natSub`, `natMul : a -> a -> a` and `natIfEq`,
-  `natIfLe : a -> a -> b -> b -> b`, which serve any numeral type, so
-  their operands are only tied to one type; `S`, `K`,
+  `natIfLe : a -> a -> b -> b -> b`, which serve any numeral type: `a`
+  carries a *numeral* constraint, as `EQ`'s operands carry the data
+  constraint, so a function or a datum of another type is refused there,
+  through an alias and a binder too
+  (`test_types::test_a_numeral_operation_refuses_a_function`,
+  `test_types::test_the_numeral_constraint_holds_through_an_alias_and_a_binder`); `S`, `K`,
   `I`, `B`, `C`, `W`, `Y` their standard ones. An axis pick projects
   through nested cells and nothing else
   (`test_types::test_an_axis_picks_into_a_cell_and_nothing_else`).
