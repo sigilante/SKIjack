@@ -66,7 +66,7 @@ git tag -a v$(python3 -c "import skijack._version as v; print(v.__version__)") -
 ## Versioning
 
 The published dictionary carries its own version prefix
-(`skijack.dictionary.VERSION`, currently `skijack-1`) and it is not the
+(`skijack.dictionary.VERSION`, currently `skijack-2`) and it is not the
 package version. A change to a Tier 1 expansion, to the encoding, or to
 the constructor-order rule is a change to *that* one, and by
 `DESIDERATA.md` §5 it is a version change whether or not the package

@@ -13,9 +13,10 @@ known expansions, and only that; unknown subterms stay raw."  That is
 :func:`lift`, and :func:`lower` takes it back.
 
 **The hash** is a Merkle hash over the tree, prefixed with the table's
-version: ``skijack-1:8f3c…``.  A leaf hashes its name; an application
+version: ``skijack-2:8f3c…``.  A leaf hashes its name; an application
 hashes ``"(" + hash(fn) + " " + hash(arg) + ")"``; both are ``sha256``
-truncated to 16 hex digits.
+truncated to 32 hex digits, 128 bits: past the reach of the birthday
+search that 64 bits left to anyone choosing both terms (``skijack-1``).
 
 Two reasons for Merkle rather than hashing a printed form.  It is
 computable in one bottom-up pass and *incrementally*: a runtime that
@@ -61,7 +62,10 @@ class DictionaryError(SkijackError):
     """A name registered twice with two different terms."""
 
 #: the table's version; a change to any entry is a change to this
-VERSION = "skijack-1"
+VERSION = "skijack-2"
+
+#: the hex digits a digest keeps: 128 bits
+DIGITS = 32
 
 #: entries smaller than this are tabled but never *lifted*: naming every
 #: ``K`` in a term (``zero``, ``nil``, ``Zero``, ``PTrue`` all expand to
@@ -99,7 +103,7 @@ def canonical(term: Term) -> str:
 
 
 def _digest(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:DIGITS]
 
 
 def hash_all(term: Term) -> Dict[int, Tuple[Term, str]]:

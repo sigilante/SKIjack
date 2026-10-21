@@ -20,7 +20,8 @@ Any second implementation must agree on the ABI:
    its constructor's position in the declaration. A wrong order is not
    an error but silently different behaviour, which is why it is the
    first thing the checker owes an author (§9).
-4. **The dictionary's version prefix** is `skijack-1`.
+4. **The dictionary's version prefix** is `skijack-2`: 128-bit digests
+   (`skijack-1`'s were 64 bits, within a birthday search's reach).
 
 Every compiled term is a closed term over `{S, K, I}`: no free
 variables, no environment, no runtime name resolution. The expander
@@ -631,8 +632,8 @@ to be defined by the program.
 Tier 1's table as a versioned artifact: for each name its expansion, its
 atom count and a structural hash. The hash is Merkle over the tree — a
 leaf hashes its name, an application hashes `"(" + hash(fn) + " " +
-hash(arg) + ")"` — `sha256` truncated to 16 hex digits, prefixed
-`skijack-1:`; equal trees hash alike however they were shared
+hash(arg) + ")"` — `sha256` truncated to 32 hex digits, 128 bits,
+prefixed `skijack-2:`; equal trees hash alike however they were shared
 (`test_dictionary::test_equal_trees_hash_alike_however_they_were_shared`).
 One name is one expansion: registering a name twice with different terms
 is refused. **Lift** names every subterm that is an exact

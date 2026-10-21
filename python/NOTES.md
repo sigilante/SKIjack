@@ -326,8 +326,9 @@ instead of the expander failing later.
 versioned artifact (`DESIDERATA.md` §5): for each name, its expansion,
 its tree-atom count and a structural hash. The hash is **Merkle over the
 tree** — a leaf hashes its name, an application hashes
-`"(" + hash(fn) + " " + hash(arg) + ")"`, `sha256` truncated to 16 hex
-digits, prefixed `skijack-1:`. Merkle rather than a printed form because
+`"(" + hash(fn) + " " + hash(arg) + ")"`, `sha256` truncated to 32 hex
+digits, prefixed `skijack-2:`. (`skijack-1` kept 16 digits; 64 bits let
+anyone choosing both terms find a collision in about 2^32 work, #18.) Merkle rather than a printed form because
 it is computable incrementally, which is exactly how
 `RUNTIME-DESIGN.md` §2's jet table is meant to match ("matches expanded
 subterms against a table of known combinators by structural hash"), and
@@ -672,7 +673,7 @@ leave the names to the combinators; and when two names share a term
     `is_interpreter_core` looks at every constructor rather than only the
     leaves so that it is caught.
 51. **The dictionary's hash is Merkle over the tree**, `sha256`
-    truncated to 16 hex digits and prefixed with the table version — see
+    truncated to 32 hex digits and prefixed with the table version — see
     the section above for why, and for what the runtime does with it.
 52. **One name is one expansion.** Registering a name twice with
     different terms raises `DictionaryError`: the table is per-ABI, and
