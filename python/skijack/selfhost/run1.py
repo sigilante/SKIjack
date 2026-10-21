@@ -710,7 +710,9 @@ def main(argv=None) -> int:
         text = FRONT.read_text()
         steps, got = run_avon(a.avon, text, extra)
         why = compare(got, reference(text))
-        if why:
+        if got is None and not why:
+            why = "front1 and the expander both refuse front1's own source"
+        if why or got is None:
             print(f"FAIL fixed point: {why}")
             fail += 1
         else:
