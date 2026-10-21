@@ -400,3 +400,32 @@ def test_a_discarded_lookup_is_never_performed(chars):
     _, _, disc = read(chars["ascii"], "disc")
     _, _, apply_ = read(chars["ascii"], "apply")
     assert disc < apply_          # three paths written, but one fewer read
+
+
+def test_a_lookup_left_unforced_under_a_whnf_term_comes_back_unread():
+    """`K ?^/src/eye` is already in weak head normal form, so the scry is
+    never forced: the answer holds the Scry leaf, unread, at the cost of
+    `K I`, where forcing the same path costs a lookup."""
+    import skijack
+    from skijack import corpus
+    e = skijack.compile(corpus.read("parse-chars")
+                        + "lazy := wfN chars |- <K ?^/src/eye>@20\n"
+                          "plain := wfN chars |- <K I>@20\n"
+                          "forced := wfN chars |- <?^/src/eye>@20\n")
+    (lc, lp, ls), (pc, pp, ps), (fc, fp, fs) = (read(e, n) for n in ("lazy", "plain", "forced"))
+    assert lc == pc == fc == "RValN"
+    assert lp.startswith("K (Scry ") and pp == "K I" and fp == "I"
+    assert ls == ps and fs > 100 * ps
+
+
+@pytest.mark.parametrize("cut,match", [
+    ("EQ5 m = eqNP EQ5 m\n", "compares paths with 'EQ5', which this program does not define"),
+    ("oanswer === OJust term5 | ONothing | ONotYet\n", "needs an oracle answer type"),
+])
+def test_a_namespace_literal_needs_EQ5_and_an_answer_type(cut, match):
+    import skijack
+    from skijack import corpus
+    from skijack.expand import ExpandError
+    base = corpus.read("scry-ns").split("resolve := ")[0].replace(cut, "")
+    with pytest.raises(ExpandError, match=match):
+        skijack.compile(base + "rz := ns{/nat => <I>}\n")

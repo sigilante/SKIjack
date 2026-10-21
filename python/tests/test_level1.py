@@ -180,6 +180,16 @@ def test_the_fuel_policy_deepens_iteratively(built, lx):
     assert r.steps == 29191          # the same run as an explicit @41
 
 
+def test_the_fuel_policy_defaults_to_8_doubling_to_4096(built):
+    """SPEC.md §6's numbers are the policy's defaults, not arguments the
+    test supplies."""
+    import inspect
+    params = inspect.signature(run_policy).parameters
+    assert (params["start"].default, params["cap"].default) == (8, 4096)
+    r = run_policy(built[("level1-flipa", "ascii")].level1["policy"], max_steps=CAP)
+    assert r.budgets == (8, 16, 32, 64) and not r.timed_out
+
+
 def test_the_cap_is_reported_not_hidden(built):
     e = built[("level1-flipa", "ascii")]
     r = run_policy(e.level1["policy"], start=2, cap=8, max_steps=CAP)

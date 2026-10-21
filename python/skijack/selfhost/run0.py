@@ -40,10 +40,12 @@ only (``tests/test_front0.py``).
 from __future__ import annotations
 
 import argparse
+import atexit
 import functools
 import pathlib
 import random
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -92,8 +94,10 @@ def compiled() -> Dict[str, Term]:
 @functools.lru_cache(maxsize=2)
 def term_dir(inline: bool = False) -> pathlib.Path:
     """A directory of the SKIT files avon front0 reads, and the front end's
-    supercombinator templates (skijack.templates) for --templates."""
+    supercombinator templates (skijack.templates) for --templates, removed
+    when the process exits."""
     d = pathlib.Path(tempfile.mkdtemp(prefix="front0-"))
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
     t = expansion(inline).terms
     for name in TERMS:
         (d / f"{name}.skit").write_bytes(jam(t[name]))
@@ -331,7 +335,9 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.profile is not None:
         text = pathlib.Path(a.profile).read_text() if a.profile else FRONT.read_text()
-        names = pathlib.Path(tempfile.mkdtemp()) / "front0.names.tsv"
+        scratch = pathlib.Path(tempfile.mkdtemp())
+        atexit.register(shutil.rmtree, scratch, ignore_errors=True)
+        names = scratch / "front0.names.tsv"
         names_file(names)
         steps, rows = profile(a.avon, text, names)
         print_profile(steps, rows)

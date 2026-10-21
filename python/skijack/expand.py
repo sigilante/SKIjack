@@ -189,6 +189,19 @@ def _fresh(base: str, taken: Set[str]) -> str:
     return f"{base}{i}"
 
 
+def _misplaced(e: A.Expr) -> ExpandError:
+    """The refusal of a quotation, a scry or a namespace literal where an
+    equation or an expression holds it: the place SPEC.md gives each."""
+    if isinstance(e, A.Quote):
+        return ExpandError("a quotation stands only as the whole right side of "
+                           "a definition, never inside an equation or an "
+                           "expression (SPEC.md §6)")
+    if isinstance(e, A.Scry):
+        return ExpandError("'?^' compiles only inside a quotation (SPEC.md §8)")
+    return ExpandError("a namespace literal stands only as the whole right "
+                       "side of a definition (SPEC.md §8)")
+
+
 def substitute(e: A.Expr, sub: Dict[str, A.Expr]) -> A.Expr:
     """Capture-avoiding substitution of names by expressions."""
     if not sub:
@@ -221,8 +234,9 @@ def substitute(e: A.Expr, sub: Dict[str, A.Expr]) -> A.Expr:
                        None if e.interp is None else substitute(e.interp, sub))
     if isinstance(e, (A.Scry, A.NsLit)):
         raise ExpandError(
-            "quotation, scry and namespace literals are not handled by this "
-            "step of the expander")
+            "a macro's body or argument holds a scry or a namespace literal; "
+            "those stand only where SPEC.md §6 and §8 place them, written out, "
+            "never produced by a macro")
     raise TypeError(f"substitute: {e!r}")
 
 
@@ -349,9 +363,7 @@ def expand_macros(e: A.Expr, macros: Dict[str, A.Macro], depth: int = 0,
         return A.Case(expand_macros(e.scrutinee, macros, depth + 1, unfold, budget),
                       tuple(branches))
     if isinstance(e, (A.Quote, A.Scry, A.NsLit)):
-        raise ExpandError(
-            "quotation, scry and namespace literals are out of scope for "
-            "this step of the expander")
+        raise _misplaced(e)
     raise TypeError(f"expand_macros: {e!r}")
 
 
@@ -1271,6 +1283,34 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
             if isinstance(prog.fuel, int):
                 out.terms[d.name] = prog.term
                 out.sizes[d.name] = size(prog.term)
+    # every emitted term is closed over S, K, I (SPEC.md §0): aviary passes
+    # a name it does not define through as an atom, so this is checked here
+    # rather than trusted to resolution
+    for nm, t in out.terms.items():
+        free = _free_atoms(t)
+        if free:
+            raise ExpandError(f"the term for {nm!r} holds the free name(s) "
+                              f"{', '.join(sorted(free)[:4])}; free variables "
+                              f"do not exist at runtime (SYNTAX.md §8)")
+    return out
+
+
+def _free_atoms(t: Term) -> Set[str]:
+    """The atoms of ``t`` other than S, K and I; iterative, shared nodes once."""
+    out: Set[str] = set()
+    seen: Set[int] = set()
+    work = [t]
+    while work:
+        x = work.pop()
+        if id(x) in seen:
+            continue
+        seen.add(id(x))
+        if isinstance(x, Atom):
+            if x.name not in ISA_NAMES:
+                out.add(x.name)
+        else:
+            work.append(x.fn)
+            work.append(x.arg)
     return out
 
 

@@ -33,7 +33,7 @@ reimplements none of them.
 
 ```sh
 skijack FILE                     # a summary
-skijack FILE --check             # Stage A; exits 1 and lists every problem
+skijack FILE --check             # Stage A, then B; exits 1 and lists every problem
 skijack FILE --expand            # every compiled term, with atom counts
 skijack FILE --dictionary        # the Tier 1 table: name, atoms, hash
 skijack FILE --lift NAME         # NAME, with what the table knows named

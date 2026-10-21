@@ -16,6 +16,7 @@ from skijack.parser import parse_ascii
 from skijack.render import render_ascii
 
 from conftest import source
+from test_check import COMPILABLE
 
 PROGRAMS = ("sec1-nat", "sec2-c", "sec3-swap", "interp-whnff", "scry-wfq",
             "scry-wfn", "scry-ns")
@@ -302,3 +303,52 @@ def test_a_supercombinator_lifts_back_to_its_name_and_a_macro_does_not():
     assert render_ascii(lift(e.terms["flipK1"], d)) == "C K"
     assert render_ascii(lift(e.terms["flipK2"], d)) == "S (K (S K)) K"
     assert (e.sizes["flipK1"], e.sizes["flipK2"]) == (11, 5)
+
+
+def test_lift_names_a_subterm_only_when_the_entry_is_it(monkeypatch):
+    """A §5 hash is 64 bits, so lift takes a hash match as a candidate and
+    names the subterm only when the entry's term is the subterm: an entry
+    indexed under another term's hash, as a collision would index it,
+    names nothing, and lower ∘ lift stays the identity.  No collision is
+    searched for: the index is given the colliding hash."""
+    from skijack import dictionary as D
+    e = expand_program(parse_ascii("nat === Zero | Suc nat\n"
+                                   "add m n = n |> { Zero m ; Suc k (Suc (add m k)) }\n"))
+    d = from_expansion(e)
+    t = e.terms["Suc"]
+    monkeypatch.setattr(D.Dictionary, "lift_index",
+                        lambda self, *a, **k: {structural_hash(t): "add"})
+    named = lift(t, d, min_size=1)
+    assert lower(named, d) == t
+    assert "add" not in render_ascii(named)
+
+
+def _program_level_names(prog, e):
+    """The names a program's own top level can spell: its equations and
+    definitions, its constructors and the prelude.  A core's equation is
+    reached by a qualified name, which resolves to nothing (SPEC.md §2),
+    and a quotation's or a namespace literal's name is not a level-0 term."""
+    from skijack.expand import PRELUDE_NAMES
+    top = {d.name for d in prog.decls if isinstance(d, (A.Equation, A.Def))
+           and not isinstance(getattr(d, "expr", None), (A.Quote, A.NsLit))}
+    top |= {c.name for d in prog.decls if isinstance(d, A.TypeDecl) for c in d.ctors}
+    return [n for n in e.terms if n in top | set(PRELUDE_NAMES)]
+
+
+@pytest.mark.parametrize("stem", COMPILABLE)
+def test_expand_of_render_is_lower(stem):
+    """SPEC.md §12: a lifted term, rendered and compiled again, is the term
+    `lower` gives back -- for every program-level term of every compiling
+    corpus program, lifted against the program-level names and compiled
+    with checking off, as lift names a subterm by its term, not its type."""
+    import skijack
+    from skijack import corpus
+    src = corpus.read(stem)
+    prog = parse_ascii(src)
+    e = expand_program(prog)
+    names = _program_level_names(prog, e)
+    d = from_expansion(e, include=names)
+    for name in names:
+        named = lift(e.terms[name], d, exclude=[name])
+        again = skijack.compile(src + f"\nzzLaw := {render_ascii(named)}\n", check=False)
+        assert again.terms["zzLaw"] == lower(named, d), name

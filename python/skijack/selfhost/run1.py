@@ -1,7 +1,7 @@
 """The full language's front end (front1.ascii.ski), checked in Avon.
 
     python3 -m skijack.selfhost.run1 --avon PATH [--corpus [--expect M]] [--edges]
-                                     [--random N] [--random1 N] [--no-fixed-point]
+                                     [--random N] [--random1 N] [--seed N] [--no-fixed-point]
                                      [--templates [--data] [--fix]]
 
 front1 is the self-hosted front end for the whole of SKIjack, built in
@@ -34,9 +34,11 @@ as the later assignment does in expand.py.
 from __future__ import annotations
 
 import argparse
+import atexit
 import functools
 import pathlib
 import random
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -552,7 +554,10 @@ def expansion():
 
 @functools.lru_cache(maxsize=1)
 def term_dir() -> pathlib.Path:
+    """front1's terms and tables, written once per process into a temporary
+    directory that is removed when the process exits."""
     d = pathlib.Path(tempfile.mkdtemp(prefix="front1-"))
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
     t = expansion().terms
     for name in TERMS:
         (d / f"{name}.skit").write_bytes(jam(t[name]))

@@ -6,16 +6,18 @@ statically by the build backend. Nothing else needs editing.
 ## Before tagging
 
 ```sh
-python3 -m pytest -q                      # 714, with the oracle present
+python3 -m pytest -q                      # the oracle present
 SKIJACK_ARTIFACT_DIR=/nonexistent SKIJACK_ALLOW_SKIP=1 \
-  python3 -m pytest -q                    # 502 + 203 skipped, deliberately
+  python3 -m pytest -q                    # 203 more skipped, deliberately
+AVON=/path/to/avon python3 -m pytest -q   # the front ends too
 ```
 
-The second run is the one a stranger gets. It must pass, and the skip
-count must be the expected one: those 203 are the cross-checks against
-the companion paper's artifact, and if they vanish without the
-`SKIJACK_ALLOW_SKIP` opt-out something has broken the guard in
-`tests/conftest.py`.
+The second run is the one a stranger without the artifact gets. It must
+pass, and it must skip exactly 203 more tests than the first: those are
+the cross-checks against the companion paper's artifact, and if they
+vanish without the `SKIJACK_ALLOW_SKIP` opt-out something has broken the
+guard in `tests/conftest.py`. Without `AVON`, the front ends' tests skip
+in every run; the third runs them in Avon.
 
 Then confirm the claims the package exists to support still hold:
 

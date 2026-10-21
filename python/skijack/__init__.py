@@ -1,7 +1,7 @@
 """skijack -- a surface language over SKI.
 
 The pipeline, end to end: :func:`compile` parses, checks (Stage A),
-generates the type-generated forms, and expands to closed ``{S,K,I}``
+generates the type-generated forms, types them (Stage B), and expands to closed ``{S,K,I}``
 terms; :func:`run_level1` runs a level-1 declaration; :func:`lift` names
 what the dictionary knows.  ``python3 -m skijack FILE`` does all of it
 from the command line.
@@ -31,7 +31,7 @@ def compile(source: str, lexicon: str = "ascii", *, check: bool = True,
     """Source text -> a compiled program.
 
     Parse, then Stage A (``check``), then the type-generated forms
-    (``generate_forms``), then expansion.  Checking can only reject, so
+    (``generate_forms``), then Stage B (``check``), then expansion.  Checking can only reject, so
     the terms are the same either way (``DESIDERATA.md`` item 11).
     ``inline`` unfolds small functions at their calls (:mod:`skijack.inline`):
     other terms, the same values; off by default.

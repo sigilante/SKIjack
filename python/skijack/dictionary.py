@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple, Union
 
 from aviary_kernel.abstraction import expand as _ski_expand
 from aviary_kernel.terms import App, Atom, Term, size
@@ -273,7 +273,7 @@ def lift(term: Term, dictionary: Dictionary,
             out.append(A.App(l, r))
             continue
         name = index.get(h(x))
-        if name is not None:
+        if name is not None and same_term(x, dictionary[name].term):
             out.append(A.Name(name))
             continue
         if isinstance(x, Atom):
@@ -283,6 +283,27 @@ def lift(term: Term, dictionary: Dictionary,
         work.append((x.arg, False))
         work.append((x.fn, False))
     return out.pop()
+
+
+def same_term(a: Term, b: Term) -> bool:
+    """Whether two terms are one tree.  A §5 hash is 64 bits, so a match
+    by hash is only a candidate: two terms built to collide share one.
+    Iterative, and a pair compared once is not compared again, so a
+    shared graph costs its size."""
+    seen: Set[Tuple[int, int]] = set()
+    work = [(a, b)]
+    while work:
+        x, y = work.pop()
+        if x is y or (id(x), id(y)) in seen:
+            continue
+        seen.add((id(x), id(y)))
+        if isinstance(x, Atom) or isinstance(y, Atom):
+            if not (isinstance(x, Atom) and isinstance(y, Atom) and x.name == y.name):
+                return False
+            continue
+        work.append((x.fn, y.fn))
+        work.append((x.arg, y.arg))
+    return True
 
 
 def lower(named: A.Expr, dictionary: Dictionary) -> Term:
