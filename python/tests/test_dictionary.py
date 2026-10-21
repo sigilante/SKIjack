@@ -69,12 +69,13 @@ def whole_names(d, term):
 def test_the_hash_is_merkle_and_versioned():
     t = App(App(Atom("S"), Atom("K")), Atom("I"))
     h = structural_hash(t)
-    assert h.startswith(VERSION + ":") and len(h.split(":")[1]) == 16
+    assert VERSION == "skijack-2"
+    assert h.startswith(VERSION + ":") and len(h.split(":")[1]) == 32
     # a leaf hashes its name; a node hashes "(fn arg)" of its children
     import hashlib
-    d = {n: hashlib.sha256(n.encode()).hexdigest()[:16] for n in "SKI"}
-    inner = hashlib.sha256(f"({d['S']} {d['K']})".encode()).hexdigest()[:16]
-    outer = hashlib.sha256(f"({inner} {d['I']})".encode()).hexdigest()[:16]
+    d = {n: hashlib.sha256(n.encode()).hexdigest()[:32] for n in "SKI"}
+    inner = hashlib.sha256(f"({d['S']} {d['K']})".encode()).hexdigest()[:32]
+    outer = hashlib.sha256(f"({inner} {d['I']})".encode()).hexdigest()[:32]
     assert h == f"{VERSION}:{outer}"
 
 

@@ -11,7 +11,7 @@ from aviary_kernel.terms import App, Atom
 
 import skijack
 from skijack import corpus
-from skijack.dictionary import structural_hash
+from skijack.dictionary import VERSION, structural_hash
 from skijack.parser import parse
 from skijack.spec0 import compile0
 from skijack.templates import (BApp, Ref, Var, check, is_eta, templates,
@@ -156,7 +156,7 @@ def _read_back(tdir):
             if tok.startswith("v"):
                 return Atom("\x00v" + tok[1:])
             if tok.startswith("#"):
-                return terms["skijack-1:" + tok[1:]]
+                return terms[f"{VERSION}:" + tok[1:]]
             return Atom(tok)
         term = build()
         assert pos[0] == len(toks)

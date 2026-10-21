@@ -208,7 +208,7 @@ def body_text(b: Body) -> str:
         elif isinstance(x, Var):
             out.append(f"v{x.n} ")
         elif isinstance(x, Ref):
-            out.append(f"#{structural_hash(x.term)[len('skijack-1:'):]} ")
+            out.append(f"#{structural_hash(x.term).split(':', 1)[1]} ")
         else:
             out.append(f"{x.name} ")
     return "".join(out).rstrip()
