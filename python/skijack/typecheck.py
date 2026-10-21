@@ -23,20 +23,32 @@ cyclic type; unification is equirecursive, so those are admitted, as is
 ``omega = S I I (S I I)``.  The nominal form is the stronger check, and
 the one to write when the check is wanted.
 
-A literal ``5`` is a numeral of a type declared ``Zero | Suc t`` -- two
-constructors, the first with no fields and the second with one field of
-the type itself -- or of ``fuel``, the prelude's own numerals; the term
-is the same for all of them.  Its type is a variable that the binding
+A literal ``5`` is a numeral of a *numeral type* -- a declared type of
+two constructors, the first with no fields and the second with one field
+of the type itself, whatever their names -- or of ``fuel``, the prelude's
+own numerals; the term is the same for all of them.  Its type is a variable that the binding
 group it occurs in must settle on one of those types.  A literal the
 group leaves unsettled defaults: to the one declared numeral type, or to
 ``fuel`` when the program declares none, and with two declared it is an
 error that asks for the context to say which.  Defaulting happens before
 the group is generalized, so no definition is polymorphic in a literal.
 
+A datum applied to fewer continuations than its type has constructors is
+a function of the rest, never a datum: only the first arrow of a Scott
+spine is an elimination arrow, so ``Zero W``, which is ``K W``, is not a
+``nat``.
+
 The operands of ``EQ`` carry a *data* constraint: a type variable so
 marked may be bound to a sum type and never to an arrow, which is how
 ``f x = EQ x PTrue`` followed by ``g := f K`` is refused although ``x``
-is a bare binder.
+is a bare binder.  The constraint reaches into a cell's and a list's
+components, and a program's own ``EQ`` carries it in its scheme, so it
+holds through an alias (``eq = EQ``) and wherever ``EQ`` is passed.
+The operands of the numeral operations carry a *numeral* constraint in
+the same way: a numeral type, or an unknown datum that must become one.
+
+A declaration whose inference outruns the host's recursion limit is
+refused with a ``TypeMismatchError``, never a crash.
 
 Erased at codegen: nothing here changes a term.
 """
@@ -67,6 +79,7 @@ class TVar:
     id: int
     data: bool = False          #: an operand of EQ: may never be a function
     ref: Optional["Type"] = None
+    numeral: bool = False       #: an operand of a numeral operation: a numeral
 
 
 @dataclass(frozen=True, eq=False)
@@ -93,6 +106,7 @@ class TArrow:
     nominal: Optional[str] = None
     datum: bool = False
     checked: Optional[str] = None    #: validated against this type's Scott spine
+    numeral: bool = False            #: eliminated as a numeral: its type must be one
 
 
 Type = Union[TVar, TCon, TArrow]
@@ -116,13 +130,18 @@ def _arrows(params: Sequence[Type], result: Type) -> Type:
 
 
 def _scott(conts: Sequence[Type], result: Type, name: str) -> Type:
-    """The spine of a datum applied to its continuations: every arrow on
-    it is an elimination arrow committed to ``name``; the continuation
-    types inside it are ordinary functions the program supplies."""
+    """The spine of a datum applied to its continuations.  Only its first
+    arrow is the datum's, an elimination arrow committed to ``name``: a
+    datum applied to fewer continuations than its type has constructors is
+    a function of the rest (``Zero W`` is ``K W``), never a datum.  The
+    continuation types inside it are ordinary functions the program
+    supplies."""
+    if not conts:
+        return result
     t = result
-    for c in reversed(conts):
-        t = TArrow(c, t, elim=True, nominal=name)
-    return t
+    for c in reversed(conts[1:]):
+        t = TArrow(c, t)
+    return TArrow(conts[0], t, elim=True, nominal=name)
 
 
 @dataclass(frozen=True)
@@ -130,6 +149,7 @@ class Scheme:
     vars: Tuple[int, ...]       #: quantified TVar ids
     data: Tuple[int, ...]       #: those of them that carry the data constraint
     type: Type
+    numeral: Tuple[int, ...] = ()   #: and those that carry the numeral constraint
 
 
 def resolve(t: Type) -> Type:
@@ -170,6 +190,12 @@ class _Fail(Exception):
     """A type error inside one declaration; reported and the pass continues."""
 
 
+#: what a declaration whose inference outran the host's recursion limit is
+#: told: Stage B refuses what it cannot settle rather than crash
+_UNSETTLED = ("Stage B could not settle this declaration's type within the "
+              "host's recursion limit, so it is refused")
+
+
 # ------------------------------------------------------------ the checker
 
 class _Types:
@@ -187,14 +213,15 @@ class _Types:
 
     # ---- variables and schemes (every walker is cycle-safe)
 
-    def fresh(self, data: bool = False) -> TVar:
+    def fresh(self, data: bool = False, numeral: bool = False) -> TVar:
         self.next_id += 1
-        return TVar(self.next_id, data)
+        return TVar(self.next_id, data, numeral=numeral)
 
     def instantiate(self, s: Scheme) -> Type:
-        if not s.vars:
-            return s.type
-        sub = {v: self.fresh(v in s.data) for v in s.vars}
+        # a scheme with nothing quantified is still copied: unification
+        # commits an arrow's flags in place (`nominal`, `checked`), so one
+        # use must not commit the arrows another use of the name sees
+        sub = {v: self.fresh(v in s.data, v in s.numeral) for v in s.vars}
         memo: Dict[int, TVar] = {}
 
         def go(t: Type) -> Type:
@@ -211,7 +238,8 @@ class _Types:
             if isinstance(t, TCon):
                 new = TCon(t.name, tuple(go(a) for a in t.args))
             else:
-                new = TArrow(go(t.param), go(t.result), t.elim, t.nominal, t.datum, t.checked)
+                new = TArrow(go(t.param), go(t.result), t.elim, t.nominal, t.datum,
+                             t.checked, t.numeral)
             hole.ref = new
             return new
         return go(s.type)
@@ -249,12 +277,15 @@ class _Types:
         self.free(t, fv)
         env_fv = self.env_free()
         qs = tuple(sorted(k for k in fv if k not in env_fv))
-        return Scheme(qs, tuple(k for k in qs if fv[k].data), t)
+        return Scheme(qs, tuple(k for k in qs if fv[k].data), t,
+                      tuple(k for k in qs if fv[k].numeral))
 
     def close(self, t: Type) -> Scheme:
         fv: Dict[int, TVar] = {}
         self.free(t, fv)
-        return Scheme(tuple(sorted(fv)), (), t)
+        qs = tuple(sorted(fv))
+        return Scheme(qs, tuple(k for k in qs if fv[k].data), t,
+                      tuple(k for k in qs if fv[k].numeral))
 
     # ---- the Scott scheme of a datum: what it is when applied
 
@@ -286,15 +317,55 @@ class _Types:
         if t is v:
             return
         if v.data:
-            if isinstance(t, TArrow):
-                if not t.elim:
-                    raise _Fail("an operand of 'EQ' is a function "
-                                f"({render_type(t)}); a value of function type "
-                                "cannot be compared")
-                t.datum = True
-            if isinstance(t, TVar):
-                t.data = True
+            self.require_data(t)
+        if v.numeral:
+            self.require_numeral(t)
         v.ref = t
+
+    def require_data(self, t: Type, seen: Optional[Set[int]] = None) -> None:
+        """The data constraint, through a cell's or a list's components:
+        no function anywhere in a value of ``t``."""
+        seen = set() if seen is None else seen
+        t = resolve(t)
+        if id(t) in seen:
+            return
+        seen.add(id(t))
+        if isinstance(t, TVar):
+            t.data = True
+        elif isinstance(t, TArrow):
+            if not t.elim:
+                raise _Fail("an operand of 'EQ' is a function "
+                            f"({render_type(t)}); a value of function type "
+                            "cannot be compared")
+            t.datum = True
+        else:
+            for a in t.args:
+                self.require_data(a, seen)
+
+    def is_numeral(self, name: str) -> bool:
+        return name == "fuel" or name in self.numeral_types()
+
+    def require_numeral(self, t: Type) -> None:
+        """The numeral constraint: ``t`` is a numeral type, or an unknown
+        datum that must become one."""
+        t = resolve(t)
+        if isinstance(t, TVar):
+            t.numeral = True
+        elif isinstance(t, TArrow):
+            if not t.elim:
+                raise _Fail(f"a function ({render_type(t)}) where a numeral is "
+                            f"expected; a function is not a datum")
+            t.numeral = t.datum = True
+            if t.nominal is not None:
+                self.nominate(t, t.nominal)
+        elif not self.is_numeral(t.name):
+            raise _Fail(f"expected a numeral, found {render_type(t)}")
+
+    def nominate(self, arrow: TArrow, name: str) -> None:
+        """Commit an elimination arrow to the type ``name``."""
+        if arrow.numeral and not self.is_numeral(name):
+            raise _Fail(f"expected a numeral, found {name}")
+        arrow.nominal = name
 
     def unify(self, expected: Type, given: Type,
               seen: Optional[Set[Tuple[int, int]]] = None) -> None:
@@ -327,8 +398,11 @@ class _Types:
                 if e.nominal and g.nominal and e.nominal != g.nominal:
                     raise _Fail(f"expected {e.nominal}, found {g.nominal}")
                 nm = e.nominal or g.nominal
-                e.nominal = g.nominal = nm
                 e.datum = g.datum = e.datum or g.datum
+                e.numeral = g.numeral = e.numeral or g.numeral
+                if nm is not None:
+                    self.nominate(e, nm)
+                    self.nominate(g, nm)
             self.unify(g.param, e.param, seen)   # parameters flip
             self.unify(e.result, g.result, seen)
             return
@@ -341,11 +415,11 @@ class _Types:
             if sc is None:
                 raise _Fail(f"expected {render_type(e)}, found {g.name}")
             if e.elim:
-                e.nominal = g.name
+                self.nominate(e, g.name)
             e.checked = g.name                   # coinductively: a cycle meeting T again holds
             try:
                 self.unify(e, sc, seen)
-            except _Fail:
+            except (_Fail, RecursionError):
                 e.checked = None
                 raise
             return
@@ -361,11 +435,11 @@ class _Types:
             sc = self.scott(e)
             if sc is None:
                 raise _Fail(f"expected {render_type(e)}, found a function")
-            g.nominal = e.name
+            self.nominate(g, e.name)
             g.checked = e.name
             try:
                 self.unify(g, sc, seen)          # what was asked of it, against what it provides
-            except _Fail:
+            except (_Fail, RecursionError):
                 g.checked = None
                 raise
             return
@@ -419,14 +493,14 @@ class _Types:
             return Scheme((), (), FUEL)
         if name == "suc":
             return Scheme((), (), TArrow(FUEL, FUEL))
-        # the numeral operations (expand.NAT_NAMES) serve any type declared
-        # as `Zero | Suc t`, whatever its name, so here they only tie their
-        # operands, and a test's two outcomes, to one type each
+        # the numeral operations (expand.NAT_NAMES) serve any numeral type
+        # (SPEC.md §4), so their operands are tied to one type that carries
+        # the numeral constraint, and a test's two outcomes to one type
         if name in ("natAdd", "natSub", "natMul"):
-            a = v()
+            a = self.fresh(numeral=True)
             return self.close(_arrows([a, a], a))
         if name in ("natIfEq", "natIfLe"):
-            a, b = v(), v()
+            a, b = self.fresh(numeral=True), v()
             return self.close(_arrows([a, a, b, b], b))
         return None
 
@@ -601,6 +675,8 @@ class _Types:
                     sig = _arrows([self.field(t) for t in d.types[:-1]],
                                   self.field(d.types[-1]))
                     self.unify(sig, self.instantiate(self.env[d.name]))
+                except RecursionError:
+                    self.add(Site("signature", d.name), _UNSETTLED)
                 except _Fail as ex:
                     self.add(Site("signature", d.name),
                              f"declared {' -> '.join(d.types)}, inferred "
@@ -617,6 +693,8 @@ class _Types:
                 self.settle([(t, n, site) for t, n in self.literals])
             except _Fail as ex:
                 self.add(site, str(ex))
+            except RecursionError:
+                self.add(site, _UNSETTLED)
             self.literals = []
         return self.problems
 
@@ -645,7 +723,7 @@ class _Types:
     # ---- literals
 
     def numeral_types(self) -> List[str]:
-        """The declared types shaped ``Zero | Suc t``, in declaration order."""
+        """The declared numeral types, in declaration order."""
         return [d.name for d in self.types.values()
                 if len(d.ctors) == 2 and not d.ctors[0].fields
                 and d.ctors[1].fields == (d.name,)]
@@ -660,8 +738,8 @@ class _Types:
                 if r.name != "fuel" and r.name not in numerals:
                     self.add(site, f"the literal {n} where a value of type "
                                    f"{render_type(r)} is expected; a literal "
-                                   f"is a numeral, of a type declared "
-                                   f"'Zero | Suc t'")
+                                   f"is a numeral, of a numeral type (SPEC.md "
+                                   f"§4)")
                 continue
             if len(numerals) > 1:
                 self.add(site, f"the literal {n} could be any of "
@@ -674,6 +752,8 @@ class _Types:
                 self.unify(r, TCon(numerals[0] if numerals else "fuel"))
             except _Fail as ex:
                 self.add(site, f"the literal {n}: {ex}")
+            except RecursionError:
+                self.add(site, _UNSETTLED)
 
     def infer_group(self, group: List[str], item_of, expanded) -> None:
         for key in group:
@@ -685,6 +765,12 @@ class _Types:
             self.literals = []
             try:
                 bound: Dict[str, Type] = {b: self.fresh() for b in binders}
+                if core is None and name == "EQ":
+                    # equality on data: its operands carry the data
+                    # constraint in its scheme, so it holds through an
+                    # alias and wherever EQ is passed (`eq = EQ`, `ap EQ`)
+                    for b in binders[:2]:
+                        self.require_data(bound[b])
                 t = _arrows([bound[b] for b in binders],
                             self.infer(expanded[key], bound, core))
                 self.unify(self.mono[key], t)
@@ -692,6 +778,9 @@ class _Types:
                 literals += [(lt, n, site) for lt, n in self.literals]
             except _Fail as ex:
                 self.add(site, str(ex))
+                results[key] = self.fresh()
+            except RecursionError:
+                self.add(site, _UNSETTLED)
                 results[key] = self.fresh()
         self.literals = []
         self.settle(literals)
