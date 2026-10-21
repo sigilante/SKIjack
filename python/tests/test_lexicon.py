@@ -3,7 +3,7 @@
 import pytest
 
 from skijack.lexicon import (COMMENT, UNICODE_ALIASES, LexError, TOKEN_TABLE,
-                             check_table, lex_ascii, lex_unicode)
+                             check_table, lex, lex_ascii, lex_unicode)
 
 
 def kinds(toks):
@@ -112,3 +112,23 @@ def test_there_are_no_non_row_spellings():
 def test_unknown_character_is_an_error():
     with pytest.raises(LexError):
         lex_ascii("a ≔ b")
+
+
+@pytest.mark.parametrize("lexicon", ["ascii", "unicode"])
+@pytest.mark.parametrize("text", ["f 10000", "f 00001", "12345@p", "f " + "1" * 5000],
+                         ids=["five", "five, zeros first", "an axis of five", "5,000"])
+def test_a_number_has_at_most_four_digits(text, lexicon):
+    """A literal is unary, so an unbounded number is an unbounded compile;
+    the fifth digit is refused where it stands (SPEC.md §1)."""
+    if lexicon == "unicode":
+        text = text.replace("@", "⊑")
+    with pytest.raises(LexError, match="at most 4 digits"):
+        lex(text, lexicon)
+
+
+def test_fuel_has_at_most_four_digits():
+    with pytest.raises(LexError, match="at most 4 digits"):
+        lex_ascii("<t>@12345")
+    with pytest.raises(LexError, match="at most 4 digits"):
+        lex_unicode("<t>₁₂₃₄₅")
+    assert [t.value for t in lex_ascii("<t>@9999") if t.kind == "FUEL"] == [9999]

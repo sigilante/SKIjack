@@ -73,6 +73,14 @@ capitalized identifier is a constructor name (CNAME).
 
 **Numbers** are decimal digits `[0-9]+` in both lexicons, read in base
 ten, so `007` is `7` (`test_literals::test_a_literal_is_read_in_base_ten`).
+A number has at most four digits, leading zeros included, so the largest
+literal, axis or fuel is 9,999; the fifth digit is a lexical error
+(`test_lexicon::test_a_number_has_at_most_four_digits`,
+`test_lexicon::test_fuel_has_at_most_four_digits`). A literal is unary
+and the self-hosted front ends read a number in unary, so the bound is
+what keeps a short program a short compile: `9999` is 79,993 atoms, and
+it compiles at the host's default recursion limit
+(`test_literals::test_the_largest_literal_compiles_at_the_default_recursion_limit`).
 A number followed by the axis mark is an axis (`2@p`, `2⊑p`); fuel is
 `@n` in ASCII and subscript digits in Unicode; any other number is a
 numeral literal (§4).
@@ -246,7 +254,8 @@ type variables and type applications are not spellable in one
   The corpus program `literals` writes words-to-numbers' case `toNum`
   with literals, and `toNum` compiles to the same 58-atom term
   (`test_examples::test_literals_compile_to_the_numerals_they_spell`).
-  A literal is unary: `n` costs `8n + 1` atoms, so `200` is 1,601. Stage
+  A literal is unary: `n` costs `8n + 1` atoms, so `200` is 1,601 and
+  the largest, `9999` (§1), is 79,993. Stage
   B gives a literal its type (§9b); a literal inside a quotation is
   refused (§9), since a numeral is a level-0 value.
 - **Case.** `e |> { C₁ b… body₁; C₂ b… body₂; … }` applies `e` to one
@@ -622,7 +631,11 @@ operation a runtime's jet table performs.
 Stated explicitly:
 
 - mutual recursion between equations (§3.2); the capturing macro `:=!`
-  (§3.5); a literal inside a quotation (§9); a quotation inside
+  (§3.5); a literal inside a quotation (§9); a number of more than four
+  digits (§1); a binder named `S`, `K` or `I` (§5); a definition that is
+  an alias of itself, `x := x` or `a := b` with `b := a`, which the host
+  refuses as an `ExpandError` (`test_cli::test_a_host_refusal_is_a_skijack_error`);
+  a quotation inside
   an equation body (§6); a core naming itself (§3.3); `step<App>` (§7);
   two object types, or two interpreters over different alphabets in one
   program (§7);
