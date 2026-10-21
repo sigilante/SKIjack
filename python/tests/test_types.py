@@ -206,3 +206,23 @@ def test_stage_b_refuses_what_it_cannot_settle_instead_of_crashing(monkeypatch):
     problems = typecheck_program(parse(NAT + "t := Suc Zero\nu := I\n", "ascii"))
     assert [p.where.name for p in problems] == ["t"]
     assert "could not settle" in problems[0].message
+
+
+def test_a_core_s_name_types_from_top_level():
+    """The name of an interpreter core denotes its loop wherever it is
+    used, so Stage B types `whnfF n d0` at top level as the expander
+    compiles it, and refuses the combinator K where a term is expected."""
+    import pathlib
+    spec = (pathlib.Path(skijack.__file__).parents[2] / "SPEC.md").read_text()
+    src = spec.split("```skijack\n")[1].split("```")[0]
+    assert typecheck_program(parse(src + "d0 := <K>\nrun n = whnfF n d0\nw := whnfF\n",
+                                   "ascii")) == []
+    (p,) = typecheck_program(parse(src + "run n = whnfF n K\n", "ascii"))
+    assert "where a value of type term is expected" in p.message
+
+
+def test_a_signature_may_name_fuel():
+    """`fuel` is the prelude's numeral type, the one a literal defaults to
+    in a program that declares none, so a signature may name it."""
+    skijack.compile("x : fuel\nx = suc 2\ninc : fuel -> fuel\ninc n = suc n\n")
+    refuses("x : fuel\nx = I\n", "declared fuel")

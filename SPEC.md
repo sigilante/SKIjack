@@ -24,7 +24,9 @@ Any second implementation must agree on the ABI:
 
 Every compiled term is a closed term over `{S, K, I}`: no free
 variables, no environment, no runtime name resolution. The expander
-refuses to emit anything else (`test_expand::test_every_output_term_is_closed_over_S_K_I`).
+refuses to emit anything else: it checks every term it emits
+(`test_expand::test_the_expander_refuses_to_emit_a_free_name`), and every
+corpus term is closed (`test_expand::test_every_output_term_is_closed_over_S_K_I`).
 
 ## 1. Lexicon
 
@@ -112,8 +114,8 @@ macro     := NAME NAME* ':=*' expr | NAME NAME* ':=!' expr
 def       := NAME ':=' expr
 expr      := app
 app       := atom+                           -- left-associative
-atom      := NAME | GLYPH | '(' expr ')'
-           | '[' expr expr+ ']'              -- cell
+atom      := NAME | GLYPH | NUMBER | '(' expr ')'   -- NUMBER: a numeral literal
+           | '[' atom atom+ ']'              -- cell; its items are atoms
            | '<' expr '>'                    -- quotation: a datum
            | '?^' atom                       -- scry
            | NUMBER '@' atom                 -- axis pick
@@ -172,9 +174,13 @@ with binders and every `\x.e` becomes its own supercombinator over the
 enclosing binders it uses `[D4]`. A self-recursive equation is tied with
 its own `Y` — the first fourteen atoms of `add` are `Y`
 (`test_expand::test_y_is_the_first_fourteen_atoms_of_a_recursive_arm`).
-**Mutual recursion between equations is refused** with a named error
-rather than mis-compiled
-(`test_expand::test_mutual_recursion_is_refused_explicitly`).
+**Mutually recursive equations share one fixpoint**: Tarjan's algorithm
+groups them, the group's generator returns the Scott tuple of the
+members' codes, each taking the group first, and each member is its
+projection from `Y` of the generator, at top level and inside a core
+(`test_expand::test_mutual_recursion_ties_one_fixpoint_per_group`,
+`test_expand::test_mutual_recursion_inside_a_core`). A group of one keeps
+its own `Y` (`test_expand::test_a_self_recursive_equation_is_compiled_as_before`).
 
 ### 3.3 Cores
 
@@ -212,7 +218,8 @@ declaration, each reported as a named error rather than a hang.
 
 `name : T -> T …` is parsed and kept on the tree, ignored by the
 expander, and checked by Stage B (§9b): the inferred type must have the
-declared one as an instance. A signature names declared types only;
+declared one as an instance. A signature names declared types and
+`fuel`, the prelude's numerals (`test_types::test_a_signature_may_name_fuel`);
 type variables and type applications are not spellable in one
 (`test_types::test_a_signature_is_checked`).
 
@@ -234,7 +241,7 @@ type variables and type applications are not spellable in one
 - **Numeral operations** join the prelude only in a program that names
   one without defining it (`expand.NAT_NAMES`), so no other program's
   terms change: `natAdd`, `natSub` (truncated at zero) and `natMul` on
-  Scott numerals of any type declared `Zero | Suc t`, and the tests
+  Scott numerals of any numeral type (below), and the tests
   `natIfEq m n x y` and `natIfLe m n x y`, which are `x` when `m = n`
   (`m <= n`) and `y` otherwise, so that no boolean type is assumed. Each
   is `Y` of a generator over the numerals' cases, as the expander ties
@@ -393,8 +400,9 @@ no-redex check: a run of `s` contractions needs fuel `s + 1` and times
 out at `s` (`test_level1::test_the_fuel_boundary_is_where_examples_says`).
 **Elided fuel `@[]`** is a runtime policy, not a compile-time value: the
 budget starts at 8 and doubles until the run produces something other
-than a timeout or reaches the cap of 4,096, which is reported as the
-timeout outcome and never hidden
+than a timeout or reaches the cap of 4,096
+(`test_level1::test_the_fuel_policy_defaults_to_8_doubling_to_4096`), which is
+reported as the timeout outcome and never hidden
 (`test_level1::test_the_cap_is_reported_not_hidden`). A program with
 elided fuel has no closed term until a budget is supplied.
 
@@ -421,8 +429,9 @@ for atom (`test_interpreter`, `test_scry`).
   level-1 path is an encoded term). Of the
   outcome-shaped declarations, the **last two** in declaration order are
   the step outcome `O` and the result `R`; a single one serves
-  as both (the Maybe shape); an earlier one is the oracle answer type;
-  `|O| = |R|` is checked (`test_generate::test_t3_shape_takes_the_last_two_outcome_shaped_declarations`).
+  as both (the Maybe shape); an earlier one is the oracle answer type
+  (`test_generate::test_t3_shape_takes_the_last_two_outcome_shaped_declarations`);
+  `|O| = |R|` is checked (`test_generate::test_mismatched_outcome_and_result_sizes_are_refused`).
 - **The oracle answer type** is the outcome-shaped declaration that is
   neither `O` nor `R`: its payload-carrying constructor is the hit, its
   last nullary constructor is "not yet".
@@ -442,10 +451,15 @@ for atom (`test_interpreter`, `test_scry`).
   one continuation per `O` constructor in declaration order: the
   term-carrying constructor continues with the new term and the
   remaining fuel; `O`'s first terminal (no redex) yields `R`'s
-  term-carrying constructor applied to the current term; each further
-  constructor of `O` maps to `R`'s constructor **at the same position**,
-  handed the same payload if it carries one (`PendingN p` → `RBlockN p`).
+  term-carrying constructor applied to the current term; a constructor of
+  `O` that carries a payload maps to `R`'s constructor **at the same
+  position**, which must carry as many fields, handed the same payload
+  (`PendingN p` → `RBlockN p`); `O`'s remaining terminals map, in order,
+  onto `R`'s terminals other than the timeout, so the timeout is returned
+  at `Zero` fuel and nowhere else
+  (`test_generate::test_the_remaining_terminals_map_in_order_and_never_onto_the_timeout`).
 - **The core's name denotes its loop** (`test_generate::test_the_core_name_denotes_its_fuel_loop`),
+  at top level in Stage B too (`test_types::test_a_core_s_name_types_from_top_level`),
   and a resolver enters as a core parameter, applied before the fuel:
   `wfN E |- <t>@n` is `loop E n <t>`.
 - **A written `step`** must hand over one continuation per leaf and
@@ -469,7 +483,8 @@ for atom (`test_interpreter`, `test_scry`).
 - **A namespace literal** `ns{ /p => <q>, … }` compiles to a flat chain of
   `EQ5` comparisons in fact order, answering the oracle type's hit at
   the first match and its "not yet" otherwise. It requires a
-  program-level `EQ5` and an oracle answer type; each fact's value must
+  program-level `EQ5` and an oracle answer type
+  (`test_scry::test_a_namespace_literal_needs_EQ5_and_an_answer_type`); each fact's value must
   be a quotation (`test_check::test_a_namespace_fact_must_be_data`);
   `ns{}` always answers "not yet". Lookup cost is linear in a fact's
   position (about fifteen thousand contractions per probe on the
@@ -482,9 +497,10 @@ for atom (`test_interpreter`, `test_scry`).
   grows; a fact once learned is never withdrawn, which is what makes
   replay sound. Fuel is spent again on each replay.
 - **A scry is a redex, not an effect**: a lookup the reduction discards
-  is never performed, and one left unforced under a term already in
-  weak head normal form comes back unread
-  (`test_scry::test_a_discarded_lookup_is_never_performed`).
+  is never performed (`test_scry::test_a_discarded_lookup_is_never_performed`),
+  and one left unforced under a term already in weak head normal form
+  comes back unread
+  (`test_scry::test_a_lookup_left_unforced_under_a_whnf_term_comes_back_unread`).
 
 ## 9. Stage A: what the checker refuses
 
@@ -630,7 +646,7 @@ operation a runtime's jet table performs.
 
 Stated explicitly:
 
-- mutual recursion between equations (§3.2); the capturing macro `:=!`
+- the capturing macro `:=!`
   (§3.5); a literal inside a quotation (§9); a number of more than four
   digits (§1); a binder named `S`, `K` or `I` (§5); a definition that is
   an alias of itself, `x := x` or `a := b` with `b := a`, which the host
@@ -646,7 +662,7 @@ Stated explicitly:
   library — a name used twice inside one
   quotation is duplicated in the datum (§5, §6);
 - a declared type has no parameters, and a signature names declared
-  types only (§9b); the pre-0.2.0 spelling of a blocked payload,
+  types and `fuel` only (§3.6); the pre-0.2.0 spelling of a blocked payload,
   `PendingN path`, is refused, since what it holds is an encoded term
   (§7, `test_types::test_the_blocked_payload_is_declared_as_what_it_holds`).
 
@@ -657,12 +673,21 @@ For every corpus program `P` and each lexicon `L`, with `M` the other:
 - `parse_L(render_L(parse_L(P))) = parse_L(P)` and
   `parse_M(render_M(parse_L(P))) = parse_L(P)`; rendering is idempotent
   (`test_roundtrip`).
-- `expand ∘ render = lower`: rendering is canonical.
-- `lower ∘ lift = id` on every compiled term (`test_dictionary`).
+- `expand ∘ render = lower`: rendering is canonical. A term lifted
+  against the program-level names, rendered and compiled again with
+  checking off is the term `lower` gives back, for every program-level
+  term of every compiling corpus program
+  (`test_dictionary::test_expand_of_render_is_lower`). The law is stated
+  over program-level names because a core's equation is reached by a
+  qualified name, which resolves to nothing (§2), and with checking off
+  because lift names a subterm by its term, not by its type.
+- `lower ∘ lift = id` on every compiled term (`test_dictionary`); lift
+  names a subterm only when the entry's term is it, never by its 64-bit
+  hash alone (`test_dictionary::test_lift_names_a_subterm_only_when_the_entry_is_it`).
 - Checking is erasure, Stage A and Stage B alike: expansion is the same
   with the checkers on or off (`test_check::test_checking_never_changes_the_terms`,
   `test_types::test_type_checking_never_changes_the_terms`).
-- Every emitted term is closed over `{S, K, I}`.
+- Every emitted term is closed over `{S, K, I}` (§0).
 - Values are read behaviourally — by applying a term to fresh marker
   atoms and observing which comes back — never by inspecting combinator
   syntax (`test_probe`).

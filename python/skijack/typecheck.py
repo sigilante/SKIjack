@@ -306,8 +306,12 @@ class _Types:
         return None
 
     def field(self, name: str) -> Type:
+        """A type a declaration or a signature names: a declared type, or
+        ``fuel``, the prelude's numerals, which a literal defaults to."""
         if name in self.types:
             return TCon(name)
+        if name == "fuel":
+            return FUEL
         raise _Fail(f"{name!r} is not a declared type")
 
     # ---- unification, oriented: expected against given; equirecursive
@@ -644,6 +648,10 @@ class _Types:
                     items.append((eq.name, d.name, tuple(d.params) + tuple(eq.binders),
                                   eq.body, Site("equation", eq.name, d.name)))
         keys = {(f"{core}.{name}" if core else name) for name, core, *_ in items}
+        #: an interpreter core's name, which denotes its loop, to the loop's key
+        loops = {d.name: f"{d.name}.loop" for d in prog.decls
+                 if isinstance(d, A.Core) and obj is not None
+                 and is_interpreter_core(d, obj) and f"{d.name}.loop" in keys}
         expanded: Dict[str, A.Expr] = {}
         item_of: Dict[str, Item] = {}
         deps: Dict[str, Set[str]] = {}
@@ -660,14 +668,13 @@ class _Types:
                     deps[key].add(f"{core}.{nm}")
                 elif nm in keys:
                     deps[key].add(nm)
+                elif nm in loops:                 # a core's name denotes its loop
+                    deps[key].add(loops[nm])
         for group in _sccs(keys, deps):
             self.infer_group(group, item_of, expanded)
-
-        for d in prog.decls:                      # a core's name denotes its loop
-            if isinstance(d, A.Core) and obj is not None and is_interpreter_core(d, obj):
-                loop = self.core_env.get(d.name, {}).get("loop")
-                if loop is not None:
-                    self.env[d.name] = loop
+            for core_name, loop_key in loops.items():   # in scope once typed
+                if loop_key in group:
+                    self.env[core_name] = self.core_env[core_name]["loop"]
 
         for d in prog.decls:
             if isinstance(d, A.Sig) and d.name in self.env:

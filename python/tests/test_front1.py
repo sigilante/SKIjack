@@ -1,7 +1,8 @@
 """The full language's front end, built in milestones (avon docs/WORKLIST.md,
 Stage 8): M1 cores, macros, signatures, the Tier 1 birds and the numeral
 operations; M2 interpreter generation; M3 quotation; M4 scries, paths and
-namespace literals.  The checkers, M5 and M6, are to come.
+namespace literals; Lit numeral literals.  The checkers, M5 and M6, are to
+come.
 
 ``skijack/selfhost/front1.ascii.ski`` is compiled by this package, with
 checking.  With ``AVON`` naming an avon binary, the last tests run it

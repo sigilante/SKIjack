@@ -237,7 +237,7 @@ def test_quotation_without_an_object_type_is_refused():
 
 def test_quotation_inside_an_arm_body_is_still_refused():
     """Step 4 packages quotation only at a top-level definition."""
-    with pytest.raises(ExpandError, match="out of scope"):
+    with pytest.raises(ExpandError, match="a quotation stands only as the whole right side"):
         expand_program(parse_ascii(
             "term === S | K | I | App term term\n"
             "maybe === Nothing | Just term\n"
@@ -321,3 +321,35 @@ def test_a_program_may_name_a_combinator_after_a_prelude_binder():
                 "nat === Zero | Suc nat\nf n = [n n]\nq := f Zero\n"):
         e = expand_program(parse_ascii(src))
         assert all(name in e.terms for name in ("x", "p", "c", "f", "q") if name in src.split())
+
+
+def test_the_expander_refuses_to_emit_a_free_name(monkeypatch):
+    """SPEC.md §0: the expander refuses to emit a term that is not closed
+    over S, K and I.  Resolution refuses an unresolved name first, so the
+    host is made to hand back an open term for one name."""
+    import importlib
+    from aviary_kernel.terms import App, Atom
+    X = importlib.import_module("skijack.expand")
+    real = X._ski_expand
+
+    def leaky(t, env):
+        out = real(t, env)
+        return App(out, Atom("ghost")) if t == Atom("x") else out
+    monkeypatch.setattr(X, "_ski_expand", leaky)
+    with pytest.raises(ExpandError, match="free name.*ghost"):
+        expand_program(parse_ascii("x := K\n"))
+
+
+@pytest.mark.parametrize("src,match", [
+    ("f x = <K>\n", "a quotation stands only as the whole right side of a definition"),
+    ("f x = K ?^/nat\n", r"'\?\^' compiles only inside a quotation"),
+    ("f x = ns{/nat => <K>}\n", "a namespace literal stands only as the whole right side"),
+    ("m x :=* <?^/nat>\nq := m K\n", "a macro's body or argument holds a scry"),
+])
+def test_a_misplaced_level_1_form_is_refused_by_its_rule(src, match):
+    """Each form is refused with the place SPEC.md gives it, with checking
+    off too, where the expander's own refusal is the one a caller sees."""
+    from skijack import corpus
+    head = corpus.read("scry-ns").split("resolve := ")[0]
+    with pytest.raises(ExpandError, match=match):
+        expand_program(parse_ascii(head + src), check=False)

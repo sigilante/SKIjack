@@ -421,8 +421,13 @@ leave the names to the combinators; and when two names share a term
    redefines `suc` does not change it. The literal stays an `ast.Num`
    node until codegen, so `--render` spells it as written. An axis pick
    (`2@p`) and fuel (`<t>@10`) keep their numbers as their own token
-   kinds. Stage B types a literal as a numeral type (`SPEC.md` §9b), and
-   a literal inside a quotation is refused.
+   kinds. Stage B types a literal as a numeral type (`SPEC.md` §9b),
+   which is a shape, not a pair of names: two constructors, the first
+   with no fields, the second with one of the type itself. A literal
+   inside a quotation is refused. A number is read in base ten and has
+   at most four digits, leading zeros included (`SPEC.md` §1): a literal
+   is unary and the self-hosted front ends read a number in unary, so
+   the digit count is the one bound every lexer can check for free.
 9. **Backend names are mangled on collision with an aviary bird.** The
    kernel refuses to shadow a built-in, so an equation named `C` is defined
    as `Cc` — the form `EXAMPLES.md`'s codegen notes record. Mangling

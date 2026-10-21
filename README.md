@@ -47,6 +47,8 @@ and the language in the companion paper on SKIjack (in review).
 
 The suite is self-contained: the four oracle scripts from
 `artifact-metacircular-ski` are vendored under `python/tests/artifact/` (provenance in the
-README there), so all 855 tests run with no setup. To check against a live checkout of the
-artifact instead, set `SKIJACK_ARTIFACT_DIR` to it. CI runs the suite on Python 3.10–3.13.
+README there), so the suite runs with no setup. The tests of the self-hosted front ends run
+them in Avon and skip unless `AVON` names an `avon` binary. To check against a live
+checkout of the artifact instead, set `SKIJACK_ARTIFACT_DIR` to it. CI runs the suite on
+Python 3.10–3.13.
 

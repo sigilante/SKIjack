@@ -136,10 +136,10 @@ share a file with the declaration.
 
 ## 4. Grammar
 
-*This is the grammar the parser implements, as `SPEC.md` §2 states it;
-the sketch that stood here listed a bare `NUMBER` atom, a postfix axis
-pick and cells of expressions, none of which survived implementation
-(`python/NOTES.md`, decisions 5 and 8).*
+*This is the grammar the parser implements, as `SPEC.md` §2 states it.
+The sketch that stood here listed a postfix axis pick and cells of
+expressions, neither of which survived implementation (`python/NOTES.md`,
+decision 5); its bare `NUMBER` atom is the numeral literal (decision 8).*
 
 ```
 decl      := type-decl | sig | equation | macro | core | def | run
@@ -153,8 +153,8 @@ macro     := NAME NAME* ':=*' expr | NAME NAME* ':=!' expr
 def       := NAME ':=' expr
 expr      := app
 app       := atom+                           -- left-associative
-atom      := NAME | GLYPH | '(' expr ')'
-           | '[' expr expr+ ']'              -- cell
+atom      := NAME | GLYPH | NUMBER | '(' expr ')'   -- NUMBER: a numeral literal
+           | '[' atom atom+ ']'              -- cell; its items are atoms
            | '<' expr '>'                    -- quotation: a datum
            | '?^' atom                       -- scry
            | NUMBER '@' atom                 -- axis pick

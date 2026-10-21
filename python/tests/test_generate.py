@@ -184,3 +184,14 @@ def test_S_K_and_I_are_the_ISA_at_level_zero():
     assert pretty(e.term("omega")) == "S I I (S I I)"
     assert e.sizes["omega"] == 6
     assert pretty(e.term("S")) != "S"        # the constructor is a term
+
+
+def test_the_remaining_terminals_map_in_order_and_never_onto_the_timeout():
+    """`OErr` is O's third constructor and `RTime` R's third, but the
+    timeout is returned at Zero fuel and nowhere else: O's remaining
+    terminals map in order onto R's terminals other than the timeout."""
+    p = parse_ascii(TERM + "out === OStep term | ONone | OErr\n"
+                           "res === RErr | RVal term | RTime\n")
+    lt = find_loop_types(p, find_object_type(p))
+    assert lt.mapping == (("ONone", "RVal"), ("OErr", "RErr"))
+    assert lt.timeout.name == "RTime"

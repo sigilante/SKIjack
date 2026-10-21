@@ -1,7 +1,7 @@
 """The full language's front end (front1.ascii.ski), checked in Avon.
 
     python3 -m skijack.selfhost.run1 --avon PATH [--corpus [--expect M]] [--edges]
-                                     [--random N] [--random1 N] [--no-fixed-point]
+                                     [--random N] [--random1 N] [--seed N] [--no-fixed-point]
                                      [--templates [--data] [--fix]]
 
 front1 is the self-hosted front end for the whole of SKIjack, built in
@@ -34,9 +34,11 @@ as the later assignment does in expand.py.
 from __future__ import annotations
 
 import argparse
+import atexit
 import functools
 import pathlib
 import random
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -406,7 +408,9 @@ EDGESL: Dict[str, str] = {
 
 
 def _program1(rng: random.Random) -> str:
-    """A random M1 program: macros, cores and equations over three types.
+    """A random M1 program: macros, cores and equations over three types,
+    with numeral literals among the leaves (the numeral operations, which
+    cost front1 far more per program, are EDGESL's and EDGESB's).
     Binder names come from a small pool, so that substitution must rename
     and binders hide macros; core equations share names across cores and
     with the top level, so that siblings and bare names are exercised."""
@@ -420,7 +424,9 @@ def _program1(rng: random.Random) -> str:
     def expr(scope, calls, depth):
         r = rng.random()
         if depth <= 0 or r < 0.2:
-            atoms = list(scope) + ["S", "K", "I", "Zero", "Yes", "Leaf", "pair", "B", "C"]
+            atoms = list(scope) + ["S", "K", "I", "Zero", "Yes", "Leaf", "pair", "B", "C",
+                                   str(rng.choice([0, 1, 3]))]      # a literal, kept small:
+            # a literal is unary, and a random program copies its leaves
             atoms += [m for m, k in macros.items() if k == 0 and m in calls]
             return rng.choice(atoms)
         if r < 0.45:
@@ -552,7 +558,10 @@ def expansion():
 
 @functools.lru_cache(maxsize=1)
 def term_dir() -> pathlib.Path:
+    """front1's terms and tables, written once per process into a temporary
+    directory that is removed when the process exits."""
     d = pathlib.Path(tempfile.mkdtemp(prefix="front1-"))
+    atexit.register(shutil.rmtree, d, ignore_errors=True)
     t = expansion().terms
     for name in TERMS:
         (d / f"{name}.skit").write_bytes(jam(t[name]))
@@ -705,7 +714,9 @@ def main(argv=None) -> int:
         text = FRONT.read_text()
         steps, got = run_avon(a.avon, text, extra)
         why = compare(got, reference(text))
-        if why:
+        if got is None and not why:
+            why = "front1 and the expander both refuse front1's own source"
+        if why or got is None:
             print(f"FAIL fixed point: {why}")
             fail += 1
         else:

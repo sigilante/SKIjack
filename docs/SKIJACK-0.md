@@ -192,9 +192,12 @@ toward the full language, milestone by milestone (avon
   operations;
 - M2: interpreter generation;
 - M3: quotation and level-1 runs;
-- M4: scries, paths and namespace literals.
+- M4: scries, paths and namespace literals;
+- Lit: numeral literals.
 
-Every corpus program compiles through it to the expander's terms. It is
+Every one of the eighteen corpus programs the expander compiles compiles
+through it to the expander's terms, and it refuses the four the expander
+refuses. It is
 still a SKIjack-0 program; the checkers, M5 and M6, are to come.
 `run1.py` checks it against the expander with checking off, on the
 corpus, edge programs, random programs and its own source;

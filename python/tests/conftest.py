@@ -15,9 +15,9 @@ ALL_SOURCES = sorted(
     for p in CORPUS.glob("*.ski")
 )
 
-#: stems the expander can compile end to end.  EXAMPLES.md 1-3 need no
-#: generation; the three interpreter stems exercise generate.py.  The
-#: remaining stems need quotation, which is a later step.
+#: stems the expander can compile end to end with no quotation.  EXAMPLES.md
+#: 1-3 need no generation; the interpreter stems exercise generate.py.
+#: test_check.COMPILABLE adds the rest of the compiling corpus.
 EXPANDABLE = ("sec1-nat", "sec2-c", "sec3-swap")
 INTERPRETERS = ("interp-whnff", "interp-whnff-written-loop",
                 "interp-whnff-written", "interp-t3")
