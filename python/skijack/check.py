@@ -156,16 +156,16 @@ class _Env:
                 or name in self.macros)
 
 
-def isa_binders(program: A.Program) -> List[Tuple[str, str]]:
+def isa_binders(program: A.Program) -> List[Tuple["Site", str]]:
     """Every binder named ``S``, ``K`` or ``I``, as (where, name).  Those
     names resolve to the ISA unconditionally (SPEC.md §5), so a binder of
     one could never be used; it is refused rather than left dead."""
-    out: List[Tuple[str, str]] = []
+    out: List[Tuple[Site, str]] = []
 
-    def names(where: str, ns) -> None:
+    def names(where: Site, ns) -> None:
         out.extend((where, n) for n in ns if n in _ISA)
 
-    def walk(where: str, x) -> None:
+    def walk(where: Site, x) -> None:
         stack = [x]
         while stack:
             y = stack.pop()
@@ -181,20 +181,20 @@ def isa_binders(program: A.Program) -> List[Tuple[str, str]]:
 
     for d in program.decls:
         if isinstance(d, A.Equation):
-            names(f"equation {d.name}", d.binders)
-            walk(f"equation {d.name}", d.body)
+            names(Site("equation", d.name), d.binders)
+            walk(Site("equation", d.name), d.body)
         elif isinstance(d, A.Macro):
-            names(f"macro {d.name}", d.params)
-            walk(f"macro {d.name}", d.body)
+            names(Site("macro", d.name), d.params)
+            walk(Site("macro", d.name), d.body)
         elif isinstance(d, A.Core):
             # a core's parameters are each equation's first binders, so a
             # core with no equations binds nothing
             for eq in d.equations:
-                names(f"equation {eq.name} of core {d.name}",
-                      tuple(d.params) + tuple(eq.binders))
-                walk(f"equation {eq.name} of core {d.name}", eq.body)
+                site = Site("equation", eq.name, d.name)
+                names(site, tuple(d.params) + tuple(eq.binders))
+                walk(site, eq.body)
         elif isinstance(d, A.Def):
-            walk(f"definition {d.name}", d.expr)
+            walk(Site("definition", d.name), d.expr)
     return out
 
 
