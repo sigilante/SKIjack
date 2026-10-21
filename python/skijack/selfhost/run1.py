@@ -43,9 +43,7 @@ import tempfile
 import time
 from typing import Dict, List, Optional, Tuple
 
-from aviary_kernel.abstraction import ExpansionError
 from aviary_kernel.terms import Atom
-from aviary_kernel.environment import DefinitionError
 
 import skijack
 from skijack.dictionary import structural_hash
@@ -363,6 +361,8 @@ EDGESB: Dict[str, str] = {
         _H + "ev n = n |> { Zero Yes ; Suc k (od k) }\nod n = n |> { Zero No ; Suc k (ev k) }\n"
              "g = Suc (Suc Zero)\n",
     "a constructor's binders named as definitions": _H + "t := Suc Zero\nc1 := K\nf0 := I\n",
+    "a definition naming itself": _H + "x := x\n",
+    "two definitions naming each other": _H + "a := b\nb := a\n",
     "the numeral operations beside suc redefined":
         _H + "suc n = n\nzero := I\nt := natAdd 1 1\nm := natMul 2 0\ns := natSub 1 3\n",
     "fuel beside suc redefined": _Q + "suc n = n\nzero := I\nr := <K I>@3\n",
@@ -393,6 +393,12 @@ EDGESL: Dict[str, str] = {
     "a literal beside suc redefined": _H + "suc n = n\nzero := I\nf := 2\n",
     "a literal beside Suc's own type": "n2 === Z2 | S2 n2\nf := S2 3\n",
     "a literal of 200": _H + "f := 200\n",
+    "a literal of four digits": _H + "f := 9999\n",
+    "a literal of five digits": _H + "f := 10000\n",
+    "a literal of 5,000 digits": _H + "f := " + "1" * 5000 + "\n",
+    "a literal of four digits, zeros first": _H + "f := 0007\n",
+    "a literal of five digits, zeros first": _H + "f := 00007\n",
+    "fuel of five digits": _Q + "r := <K I>@12345\n",
     "a literal quoted": _Q + "d := <K 2>\nlit := 2\n",
     "a literal as fuel's neighbour": _Q + "r := <K I>@3\nlit := 3\n",
     "a literal in a fact": _B + "rz := ns{/nat => <I>}\nlit := 3\n",
@@ -579,13 +585,13 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
 
 
 def reference(text: str) -> Result:
-    """The expander's terms with checking off, hashed; None if it refuses,
-    which it may do from the host reducer too: a binder named S, K or I is
-    refused by aviary's environment (docs/SKIJACK-0.md §1)."""
+    """The expander's terms with checking off, hashed; None if it refuses.
+    Every refusal is a SkijackError, the host's included (an alias of
+    itself), and a binder named S, K or I is refused by name."""
     try:
         with Deep():
             e = skijack.compile(text, lexicon="ascii", check=False)
-    except (SkijackError, DefinitionError, ExpansionError):
+    except SkijackError:
         return None
     if not all(_closed(t) for t in e.terms.values()):
         return None

@@ -64,7 +64,8 @@ out   = skijack.run_level1(exp.level1["answer"], 1_000_000)
 ```
 
 Everything this package raises for a bad program derives from
-`skijack.SkijackError`.
+`skijack.SkijackError`, including a refusal by aviary, the host that
+abstracts and expands, which reaches the caller as an `ExpandError`.
 
 ## Definitions
 

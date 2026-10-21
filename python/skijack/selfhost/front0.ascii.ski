@@ -154,10 +154,12 @@ atSym y = y |> { SEq No ; SBar No ; SGt No ; SColon No ; SBack No ; SDot No ; SS
 nextIs cd r = r |> { SNil No ; SCons c r2 (eqCode c cd) }
 tail r = r |> { SNil SNil ; SCons c r2 r2 }
 lx s = s |> { SNil (TCons TNl TNil) ; SCons c r (lxc c (classify c) r) }
-lxc c k r = k |> { ChSpace (lx r) ; ChNl (TCons TNl (lx r)) ; ChLetter (lxName (NCons c NNil) r) ; ChDigit d (lxNum d r) ; ChPrime (TCons TBad (lx r)) ; ChSym y (lxSym y r) ; ChOther (TCons TBad (lx r)) }
+lxc c k r = k |> { ChSpace (lx r) ; ChNl (TCons TNl (lx r)) ; ChLetter (lxName (NCons c NNil) r) ; ChDigit d (lxNum d one r) ; ChPrime (TCons TBad (lx r)) ; ChSym y (lxSym y r) ; ChOther (TCons TBad (lx r)) }
 lxName acc r = r |> { SNil (TCons (TName (IdRaw (revAcc acc NNil))) (lx SNil)) ; SCons c r2 (idChar (classify c) |> { Yes (lxName (NCons c acc) r2) ; No (TCons (TName (IdRaw (revAcc acc NNil))) (lx r)) }) }
-lxNum n r = r |> { SNil (TCons TBad (lx SNil)) ; SCons c r2 (numStep n (classify c) r r2) }
-numStep n k r r2 = k |> { ChSpace (TCons TBad (lx r)) ; ChNl (TCons TBad (lx r)) ; ChLetter (TCons TBad (lx r)) ; ChDigit d (lxNum (add (mul10 n) d) r2) ; ChPrime (TCons TBad (lx r)) ; ChSym y (atSym y |> { Yes (TCons (TAxis n) (lx r2)) ; No (TCons TBad (lx r)) }) ; ChOther (TCons TBad (lx r)) }
+-- a number has at most four digits (skijack.lexicon.MAX_DIGITS): a fifth
+-- is refused where it stands, so no number is read past 9,999
+lxNum n nd r = r |> { SNil (TCons TBad (lx SNil)) ; SCons c r2 (numStep n nd (classify c) r r2) }
+numStep n nd k r r2 = k |> { ChSpace (TCons TBad (lx r)) ; ChNl (TCons TBad (lx r)) ; ChLetter (TCons TBad (lx r)) ; ChDigit d (eqN nd four |> { Yes (TCons TBad (lx r)) ; No (lxNum (add (mul10 n) d) (Suc nd) r2) }) ; ChPrime (TCons TBad (lx r)) ; ChSym y (atSym y |> { Yes (TCons (TAxis n) (lx r2)) ; No (TCons TBad (lx r)) }) ; ChOther (TCons TBad (lx r)) }
 lxSym y r = y |> { SEq (nextIs codeEqc r |> { Yes (nextIs codeEqc (tail r) |> { Yes (TCons TTypeDecl (lx (tail (tail r)))) ; No (TCons TEq (lx r)) }) ; No (TCons TEq (lx r)) }) ; SBar (nextIs codeGt r |> { Yes (TCons TCase (lx (tail r))) ; No (TCons TAlt (lx r)) }) ; SGt (TCons TBad (lx r)) ; SColon (nextIs codeEqc r |> { Yes (TCons TAssign (lx (tail r))) ; No (TCons TBad (lx r)) }) ; SBack (TCons TLam (lx r)) ; SDot (TCons TDot (lx r)) ; SSemi (TCons TSemi (lx r)) ; SLP (TCons TLP (lx r)) ; SRP (TCons TRP (lx r)) ; SLB (TCons TLB (lx r)) ; SRB (TCons TRB (lx r)) ; SLC (TCons TLC (lx r)) ; SRC (TCons TRC (lx r)) ; SAt (TCons TBad (lx r)) ; SMinus (nextIs codeMinus r |> { Yes (skipLine r) ; No (TCons TBad (lx r)) }) }
 skipLine r = r |> { SNil (lx SNil) ; SCons c r2 (eqCode c codeNl |> { Yes (TCons TNl (lx r2)) ; No (skipLine r2) }) }
 -- lists of names

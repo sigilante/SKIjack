@@ -257,6 +257,8 @@ EDGES: Dict[str, str] = {
     "a lambda shadowing a recursion": _H + "f x = x |> { Zero (\\f. f) ; Suc k (f k) }\n",
     "a branch shadowing a recursion": _H + "f x = x |> { Zero Zero ; Suc f (f Zero) }\n",
     "a binder twice": _H + "f x x = x\n",
+    "an axis of four digits": _H + "f p = 9999@p\n",
+    "an axis of five digits": _H + "f p = 12345@p\n",
     "a lambda capturing a binder twice": _H + "f x x = \\y. x y\n",
     "a mutual pair": _H + "ev n = n |> { Zero Yes ; Suc k (od k) }\nod n = n |> { Zero No ; Suc k (ev k) }\n",
     "a member shadowed": _H + ("ev n = n |> { Zero Yes ; Suc od (od Zero) }\n"

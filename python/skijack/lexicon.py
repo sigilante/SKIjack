@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
 __all__ = [
-    "Row", "TOKEN_TABLE", "Token", "LexError",
+    "Row", "TOKEN_TABLE", "Token", "LexError", "MAX_DIGITS",
     "lex_ascii", "lex_unicode", "lex", "check_table",
     "ascii_spelling", "unicode_spelling", "GLYPH_NAMES", "UNICODE_ALIASES",
 ]
@@ -244,6 +244,24 @@ _UNI_FUEL = re.compile(r"(?:([₀-₉]+)|(₍₎))")
 
 _SUBDIGITS = {chr(0x2080 + i): str(i) for i in range(10)}
 
+#: the most digits a number may have -- a literal, an axis or fuel -- so
+#: the largest is 9,999.  A literal is unary, `n` costs 8n + 1 atoms, and
+#: the self-hosted front ends build a number in unary as they read it, so
+#: an unbounded number is an unbounded compile; four digits bound a
+#: literal at 79,993 atoms and every lexer can refuse the fifth digit
+#: without reading the rest (SPEC.md §1).
+MAX_DIGITS = 4
+
+
+def _number(digits: str, line: int, col: int) -> int:
+    """A digit run's value, refused past :data:`MAX_DIGITS`."""
+    if len(digits) > MAX_DIGITS:
+        raise LexError(
+            f"line {line}, column {col}: a number has at most {MAX_DIGITS} "
+            f"digits, so the largest is {10 ** MAX_DIGITS - 1:,}; this one has "
+            f"{len(digits):,}")
+    return int(_desub(digits))
+
 
 def _desub(text: str) -> str:
     return "".join(_SUBDIGITS.get(c, c) for c in text)
@@ -281,13 +299,13 @@ def lex(text: str, lexicon: str) -> List[Token]:
             continue
         m = axis_re.match(text, i)
         if m:
-            out.append(Token("AXIS", int(_desub(m.group(1))), line, col))
+            out.append(Token("AXIS", _number(m.group(1), line, col), line, col))
             i = m.end()
             continue
         m = fuel_re.match(text, i)
         if m:
             digits, policy = m.group(1), m.group(2)
-            value: Union[str, int] = "policy" if policy else int(_desub(digits))
+            value: Union[str, int] = "policy" if policy else _number(digits, line, col)
             out.append(Token("FUEL", value, line, col))
             i = m.end()
             continue
@@ -312,7 +330,7 @@ def lex(text: str, lexicon: str) -> List[Token]:
             continue
         m = _NUMBER.match(text, i)
         if m:
-            out.append(Token("NUMBER", int(m.group(0)), line, col))
+            out.append(Token("NUMBER", _number(m.group(0), line, col), line, col))
             i = m.end()
             continue
         raise LexError(f"line {line}, column {col}: unexpected character {c!r}")

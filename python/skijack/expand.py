@@ -28,6 +28,7 @@ The passes, in order:
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
@@ -35,6 +36,8 @@ from aviary_kernel.abstraction import (bracket_abstract as _bracket_abstract,
                                        expand as _ski_expand)
 from aviary_kernel.birds import BY_NAME
 from .abi import TIER1_NAMES
+from aviary_kernel.abstraction import ExpansionError as _HostExpansionError
+from aviary_kernel.environment import DefinitionError as _HostDefinitionError
 from aviary_kernel.environment import Environment
 from aviary_kernel.terms import Atom, App as KApp, Term, pretty, size
 
@@ -643,9 +646,36 @@ def _mangle(name: str, used: Set[str]) -> str:
 
 # -------------------------------------------------------------- the driver
 
+#: the recursion limit compiling a program needs: aviary expands a term
+#: recursively, one frame per level, and a four-digit literal is 9,999
+#: levels deep (``skijack.lexicon.MAX_DIGITS``)
+_EXPAND_RECURSION = 100_000
+
+
 def expand_program(program: A.Program, env: Optional[Environment] = None,
                    generate_forms: bool = True, check: bool = True,
                    inline: bool = False) -> Expansion:
+    """Compile a program; see :func:`_expand_program`.
+
+    Two things are true of every call, whatever the program: the host's
+    recursion limit is at least ``_EXPAND_RECURSION`` while it runs, and
+    put back after; and a refusal by aviary, the host that abstracts and
+    expands (a recursive alias such as ``x := x``), is an
+    :class:`ExpandError`, so bad input raises a :class:`SkijackError`.
+    """
+    old = sys.getrecursionlimit()
+    sys.setrecursionlimit(max(old, _EXPAND_RECURSION))
+    try:
+        return _expand_program(program, env, generate_forms, check, inline)
+    except (_HostDefinitionError, _HostExpansionError) as ex:
+        raise ExpandError(f"the host refused the program: {ex}") from ex
+    finally:
+        sys.setrecursionlimit(old)
+
+
+def _expand_program(program: A.Program, env: Optional[Environment] = None,
+                    generate_forms: bool = True, check: bool = True,
+                    inline: bool = False) -> Expansion:
     """Compile a program to closed ``{S,K,I}`` terms, one per name.
 
     With ``check`` (the default), Stage A runs first, over the *parsed*

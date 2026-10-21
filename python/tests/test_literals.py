@@ -160,3 +160,16 @@ def test_a_definition_is_not_polymorphic_in_a_literal():
     """``inc`` settles on nat before it is generalized, so ``inc T`` fails."""
     (msg,) = _stage_b(NAT + "bool === F | T\ninc x = natAdd x 1\ny = inc T\n")
     assert "expected nat, found bool" in msg
+
+
+def test_the_largest_literal_compiles_at_the_default_recursion_limit():
+    """9,999 levels deep, past Python's default limit of 1,000: the
+    expander raises the limit while it runs and puts it back."""
+    old = sys.getrecursionlimit()
+    sys.setrecursionlimit(1000)
+    try:
+        exp = skijack.compile(NAT + "x := 9999\n", lexicon="ascii")
+        assert sys.getrecursionlimit() == 1000
+    finally:
+        sys.setrecursionlimit(old)
+    assert exp.sizes["x"] == 8 * 9999 + 1

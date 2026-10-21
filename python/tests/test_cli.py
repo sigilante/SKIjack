@@ -211,3 +211,22 @@ def test_every_error_class_shares_one_base():
     for cls in (LexError, ParseError, CheckError, ExpandError,
                 GenerateError, QuoteError, RunError):
         assert issubclass(cls, skijack.SkijackError), cls.__name__
+
+
+@pytest.mark.parametrize("src", ["x := x\n", "a := b\nb := a\n"])
+def test_a_host_refusal_is_a_skijack_error(src, tmp_path):
+    """aviary refuses an alias of itself; the refusal reaches the caller as
+    an ExpandError, and the CLI as a message rather than a traceback."""
+    with pytest.raises(skijack.ExpandError, match="the host refused"):
+        skijack.compile(src)
+    f = tmp_path / "self.ascii.ski"
+    f.write_text(src)
+    code, _out, err = run("--expand", str(f))
+    assert code == 1 and "Traceback" not in err and "the host refused" in err
+
+
+def test_a_long_number_is_a_message_not_a_traceback(tmp_path):
+    f = tmp_path / "long.ascii.ski"
+    f.write_text("nat === Zero | Suc nat\nx := " + "1" * 5000 + "\n")
+    code, _out, err = run("--check", str(f))
+    assert code == 1 and "at most 4 digits" in err and "Traceback" not in err
