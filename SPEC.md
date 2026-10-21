@@ -174,9 +174,13 @@ with binders and every `\x.e` becomes its own supercombinator over the
 enclosing binders it uses `[D4]`. A self-recursive equation is tied with
 its own `Y` — the first fourteen atoms of `add` are `Y`
 (`test_expand::test_y_is_the_first_fourteen_atoms_of_a_recursive_arm`).
-**Mutual recursion between equations is refused** with a named error
-rather than mis-compiled
-(`test_expand::test_mutual_recursion_is_refused_explicitly`).
+**Mutually recursive equations share one fixpoint**: Tarjan's algorithm
+groups them, the group's generator returns the Scott tuple of the
+members' codes, each taking the group first, and each member is its
+projection from `Y` of the generator, at top level and inside a core
+(`test_expand::test_mutual_recursion_ties_one_fixpoint_per_group`,
+`test_expand::test_mutual_recursion_inside_a_core`). A group of one keeps
+its own `Y` (`test_expand::test_a_self_recursive_equation_is_compiled_as_before`).
 
 ### 3.3 Cores
 
@@ -642,7 +646,7 @@ operation a runtime's jet table performs.
 
 Stated explicitly:
 
-- mutual recursion between equations (§3.2); the capturing macro `:=!`
+- the capturing macro `:=!`
   (§3.5); a literal inside a quotation (§9); a number of more than four
   digits (§1); a binder named `S`, `K` or `I` (§5); a definition that is
   an alias of itself, `x := x` or `a := b` with `b := a`, which the host
