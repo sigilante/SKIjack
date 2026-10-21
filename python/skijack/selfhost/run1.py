@@ -408,7 +408,9 @@ EDGESL: Dict[str, str] = {
 
 
 def _program1(rng: random.Random) -> str:
-    """A random M1 program: macros, cores and equations over three types.
+    """A random M1 program: macros, cores and equations over three types,
+    with numeral literals among the leaves (the numeral operations, which
+    cost front1 far more per program, are EDGESL's and EDGESB's).
     Binder names come from a small pool, so that substitution must rename
     and binders hide macros; core equations share names across cores and
     with the top level, so that siblings and bare names are exercised."""
@@ -422,7 +424,9 @@ def _program1(rng: random.Random) -> str:
     def expr(scope, calls, depth):
         r = rng.random()
         if depth <= 0 or r < 0.2:
-            atoms = list(scope) + ["S", "K", "I", "Zero", "Yes", "Leaf", "pair", "B", "C"]
+            atoms = list(scope) + ["S", "K", "I", "Zero", "Yes", "Leaf", "pair", "B", "C",
+                                   str(rng.choice([0, 1, 3]))]      # a literal, kept small:
+            # a literal is unary, and a random program copies its leaves
             atoms += [m for m, k in macros.items() if k == 0 and m in calls]
             return rng.choice(atoms)
         if r < 0.45:
