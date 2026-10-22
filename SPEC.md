@@ -1,6 +1,6 @@
 # SKIjack: the language specification
 
-## Version 0.2.0
+## Version 0.2.1
 
 This document states the SKIjack language as the reference implementation
 (`python/skijack`) compiles it confirmed by its test suite. Every rule
