@@ -29,6 +29,37 @@ jobs:
         working-directory: python
         run: python -m pytest -q
 
+  # Every reduction the suite makes, run by Avon and by aviary and compared
+  # (SKIJACK_REDUCER=check), with the front-end tests, which need Avon too.
+  # Avon is built at a pinned commit, one with `batch --dag`.
+  avon:
+    name: pytest, every reduction checked against Avon
+    runs-on: ubuntu-24.04
+    env:
+      AVON_REF: 65ae1a5b24d9813566cfd2eb38f8c01707da8259   # sigilante/avon #60, batch --dag
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: sigilante/avon
+          ref: ${{ env.AVON_REF }}
+          path: avon
+      - name: Build Avon
+        run: make -C avon -j4 CC=clang-18 build/avon
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e "python[test]"
+      - name: Test
+        working-directory: python
+        env:
+          AVON: ${{ github.workspace }}/avon/build/avon
+          SKIJACK_REDUCER: check
+        run: python -m pytest -q
+
   types:
     name: mypy
     runs-on: ubuntu-latest

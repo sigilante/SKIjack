@@ -29,6 +29,11 @@ Requires Python 3.10+ and `aviary-kernel`, which supplies bracket
 abstraction, the term representation and the reducer. This package
 reimplements none of them.
 
+[Avon](https://github.com/sigilante/avon), a C runtime, can run the
+reductions instead: `SKIJACK_REDUCER=avon` with `AVON` naming its binary,
+or `SKIJACK_REDUCER=check` to run both and compare (`skijack/avon.py`).
+Avon's copy mode gives aviary's statuses, counts and terms.
+
 ## Use
 
 ```sh
