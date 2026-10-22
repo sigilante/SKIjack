@@ -21,11 +21,11 @@ A supercombinator language over the $SKI$ combinatory logic and a graph-reductio
 - `SURFACE-LANGUAGE-DESIGN.md`: the kernel forms, the representation ABI (Scott pairs as cells, Nock axes over data, cores tied with `Y`), the compile rules, compile-time name resolution with no runtime environment, the standard library the runtime supplies at boot, and the quotation line that a theorem fixes.
 - `EXAMPLES.md`: numerals (increment, decrement, addition, subtraction), a combinator three ways, a macro over pairs at level 0 and level 1, a user interpreter, a value lookup, words to numbers both as a case and as a namespace, full ASCII as a type with a digit parser, and an event type with a kernel the runtime pokes — in both spellings, with the codegen and the checks that were actually run.
 - `RUNTIME-DESIGN.md`: why a Turner-style reducer with jets is required, what it must reproduce, and what it must not do.
-- `avon/DESIGN.md`: the build plan for the C runtime — the measurement that fixes its acceptance test (sharing changes the paper's counts and not its values, so Avon carries two strategies), the node and arena representation, jets as loader-installed wrappers rather than runtime hashing, the conformance harness, and eight stages with what each one has to prove. `avon/bench/strategies.py` reproduces the measurement, and `avon/bench/jets.py` lists the structures the compiled corpus repeats most, the candidates for jets.
+- [Avon](https://github.com/sigilante/avon): the C runtime, built (`docs/DESIGN.md` there; `avon/DESIGN.md` here links to it from a checkout beside this one). Its design note began as the build plan — the measurement that fixes its acceptance test (sharing changes the paper's counts and not its values, so Avon carries two strategies), the node and arena representation, jets as loader-installed wrappers rather than runtime hashing, the conformance harness, and eight stages with what each one has to prove. `avon/bench/strategies.py` reproduces the measurement, and `avon/bench/jets.py` lists the structures the compiled corpus repeats most, the candidates for jets.
 
 - `editors/vscode/`: syntax highlighting for `.ski` in VS Code, both lexicons, driven by the token table; symlink it into `~/.vscode/extensions/` (its README says how).
 
-- `python/`: `skijack`, the reference implementation in Python on `aviary-kernel`: the two lexers over one token table, one parser, renderers for both lexicons, the expander through bracket abstraction, and behavioral probes; `python/README.md` records every decision taken and what its test suite proves. Its corpus under `python/skijack/corpus/` is written in both spellings and is also Avon's conformance suite: the C runtime is correct when it reproduces `skijack`'s terms and decoded values on every file there, and the reference host's contraction counts under its faithful strategy (`avon/DESIGN.md` §1).
+- `python/`: `skijack`, the reference implementation in Python on `aviary-kernel`: the two lexers over one token table, one parser, renderers for both lexicons, the expander through bracket abstraction, and behavioral probes; `python/README.md` records every decision taken and what its test suite proves. Its corpus under `python/skijack/corpus/` is written in both spellings and is also Avon's conformance suite: the C runtime is correct when it reproduces `skijack`'s terms and decoded values on every file there, and the reference host's contraction counts under its faithful strategy (Avon's `docs/DESIGN.md` §1).
 
 Three levels: an **equation** `f x y = body` is what an author writes, a
 **supercombinator** is the closed `Y`-tied term it compiles to, and a
@@ -45,10 +45,31 @@ and the language in the companion paper on SKIjack (in review).
     pip install -e "python[test]"
     python -m pytest python/tests
 
+## Running programs
+
+    skijack python/skijack/corpus/scry-ns.ascii.ski --run answer     # RValN K   (28661 contractions)
+
+By default every reduction runs in Python, on `aviary-kernel`'s algorithm.
+[Avon](https://github.com/sigilante/avon) runs the same reductions in C:
+build it (`make` in an Avon checkout) and name the binary.
+
+    export AVON=/path/to/avon/build/avon
+    SKIJACK_REDUCER=avon  skijack FILE --run NAME      # reduced by Avon
+    SKIJACK_REDUCER=check skijack FILE --run NAME      # by both, compared
+
+Avon runs in its copy mode, the reference host's algorithm, so every
+status, contraction count and term is aviary's; `check` runs each
+reduction both ways and stops at the first difference. A term holding a
+live aviary bird (`B`, `C`, `Y`, ...) stays with aviary, since Avon reduces
+S, K and I alone. The whole suite passes in each mode, and CI runs it under
+`check` against Avon. `python/skijack/avon.py` is the bridge.
+
 The suite is self-contained: the four oracle scripts from
 `artifact-metacircular-ski` are vendored under `python/tests/artifact/` (provenance in the
 README there), so the suite runs with no setup. The tests of the self-hosted front ends run
-them in Avon and skip unless `AVON` names an `avon` binary. To check against a live
+them in Avon and skip unless `AVON` names an `avon` binary; with
+`SKIJACK_REDUCER=check` as well, every reduction the suite makes is compared
+between the two. To check against a live
 checkout of the artifact instead, set `SKIJACK_ARTIFACT_DIR` to it. CI runs the suite on
 Python 3.10–3.13.
 

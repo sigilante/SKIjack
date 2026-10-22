@@ -24,6 +24,7 @@ from aviary_kernel.reduce import (ReduceResult, Status, _decompose, _Frame,
 from aviary_kernel.terms import Atom, App, apply as _apply, pretty
 
 from .expand import Expansion
+from . import avon as _avon
 
 __all__ = ["fast_reduce", "dag_size", "Prober", "SIZE_CHECK_EVERY",
            "ProbeError"]
@@ -61,7 +62,31 @@ def fast_reduce(term, env, *, whnf_only=True, max_steps=10 ** 6,
     the whole term, which is O(nodes) per sample; at tower scale that
     costs more than the reduction it protects, and ``max_steps`` already
     bounds the run.
+
+    With ``SKIJACK_REDUCER=avon`` the run goes to Avon's copy mode
+    instead, and with ``check`` to both, compared (:mod:`skijack.avon`).
     """
+    mode, avon = _avon.reducer()
+    if avon is not None:
+        r = avon.reduce(term, env, whnf_only=whnf_only, max_steps=max_steps,
+                        max_size=max_size)
+        if r is not None:
+            if mode == "check":
+                ref = _aviary_reduce(term, env, whnf_only=whnf_only,
+                                     max_steps=max_steps, max_size=max_size)
+                if (ref.status is not r.status or ref.steps != r.steps
+                        or not _avon.same_term(ref.term, r.term)):
+                    raise _avon.AvonMismatch(
+                        f"aviary {ref.status.name} {ref.steps}, avon "
+                        f"{r.status.name} {r.steps}"
+                        f"{'' if _avon.same_term(ref.term, r.term) else ', terms differ'}")
+            return r
+    return _aviary_reduce(term, env, whnf_only=whnf_only, max_steps=max_steps,
+                          max_size=max_size)
+
+
+def _aviary_reduce(term, env, *, whnf_only, max_steps, max_size) -> ReduceResult:
+    """The reduction in Python: aviary's algorithm, the size guard sampled."""
     steps = 0
     stack: List[_Frame] = []
 
