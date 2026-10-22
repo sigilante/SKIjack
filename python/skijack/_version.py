@@ -6,4 +6,4 @@ read it statically, without importing the package (which would drag in
 and ``pyproject.toml`` reads it from here.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"

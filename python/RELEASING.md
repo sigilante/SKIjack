@@ -40,7 +40,7 @@ an install without it is a compiler with no examples:
 ```sh
 python3 -c "import zipfile; z=zipfile.ZipFile('dist/skijack-$(python3 -c '
 import skijack._version as v; print(v.__version__)')-py3-none-any.whl');
-print(sum(1 for f in z.namelist() if f.endswith('.ski')))"   # 34
+print(sum(1 for f in z.namelist() if f.endswith('.ski')))"   # 46
 ```
 
 ## Install clean and smoke test
