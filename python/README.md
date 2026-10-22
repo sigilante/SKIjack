@@ -82,17 +82,19 @@ before anything runs; there is no environment at run time.
 
 ## Tests
 
+The suite is not in the wheel. Run it from a checkout of
+[SKIjack](https://github.com/sigilante/SKIjack):
+
 ```sh
-pip install skijack[test]
-python3 -m pytest -q
+pip install -e "python[test]"
+python3 -m pytest -q python/tests
 ```
 
 Roughly a third of the suite compares compiled terms against the
-hand-built artifact of the companion paper. Point `SKIJACK_ARTIFACT_DIR`
-at a checkout of it, or set `SKIJACK_ALLOW_SKIP=1` to run the reduced
-suite knowingly --- the suite refuses to run silently without its
-oracle, because what remains would check the compiler only against
-itself.
+hand-built artifact of the companion paper. Its oracle scripts are
+vendored under `python/tests/artifact`, so the suite runs with no setup;
+`SKIJACK_ARTIFACT_DIR` points it at a live checkout of the artifact
+instead.
 
 ## More
 

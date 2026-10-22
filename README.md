@@ -40,12 +40,28 @@ described in *A self-interpreter for SKI: Authoring semantics for new symbols*
 ([doi:10.5281/zenodo.22867957](https://doi.org/10.5281/zenodo.22867957), in review at JFP),
 and the language in the companion paper on SKIjack (in review).
 
-## Install and test
+## Install
+
+SKIjack is on PyPI as [`skijack`](https://pypi.org/project/skijack/). It
+needs Python 3.10 or later and pulls in `aviary-kernel`.
+
+    pip install skijack
+
+The wheel ships the `skijack` command and the 44-file conformance corpus
+under `skijack/corpus`:
+
+    C=$(python -c 'import skijack.corpus, os; print(os.path.dirname(skijack.corpus.__file__))')
+    skijack "$C/scry-ns.ascii.ski" --run answer     # RValN K   (28661 contractions)
+
+The test suite lives in this repository, so to run it, install from a
+checkout:
 
     pip install -e "python[test]"
     python -m pytest python/tests
 
 ## Running programs
+
+From a checkout, the corpus is at `python/skijack/corpus`:
 
     skijack python/skijack/corpus/scry-ns.ascii.ski --run answer     # RValN K   (28661 contractions)
 
