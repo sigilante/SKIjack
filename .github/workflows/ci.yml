@@ -1,10 +1,31 @@
 name: CI
 
+# A change only to prose skips CI. SPEC.md is read by the suite, and
+# python/README.md and python/LICENSE go into the package the build job
+# checks, so those three still run it.
 on:
   push:
     branches: [master]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!img/**"
+      - "!LICENSE"
+      - "SPEC.md"
+      - "python/README.md"
+      - "python/LICENSE"
   pull_request:
     branches: [master]
+    paths:
+      - "**"
+      - "!**/*.md"
+      - "!docs/**"
+      - "!img/**"
+      - "!LICENSE"
+      - "SPEC.md"
+      - "python/README.md"
+      - "python/LICENSE"
 
 jobs:
   test:
