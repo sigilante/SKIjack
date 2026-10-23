@@ -324,6 +324,13 @@ SKIlark's 41 (928,398), 2026-09-28:
   times, 4.2%. By size it led the static table; by time, constructors
   outrank it.
 
+*Rerun, 2026-10-23.* SKIlark's kernel now takes Church fuel (SKIlark
+#5), and its 41 runs fall to 333,013 contractions. Over both corpora,
+2,063,445, `Cons` leads at 9.1%, then `B (B K)` 8.1%, `pair` 7.8%,
+`B (B S)` 6.7%, `step` with its wrapper 5.9% and `App` 5.4%; `T` falls
+to 3.5% and `Suc` to 0.6%, since most of their calls were the old fuel's
+arithmetic. The ranking's two findings hold.
+
 The census supports Turner's extended set at the runtime and a
 parametric constructor jet over a jet per named supercombinator.
 
