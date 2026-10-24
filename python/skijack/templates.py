@@ -245,7 +245,7 @@ def write(ts: List[Template], templates_path, terms_path) -> Tuple[int, int]:
 
 #: the numeral operations Avon runs on words, by the name ``words.tsv`` gives
 WORD_OPS = {"natAdd": "add", "natSub": "sub", "natMul": "mul",
-            "natIfEq": "ifeq", "natIfLe": "ifle"}
+            "natIfEq": "ifeq", "natIfLe": "ifle", "natDiv": "div", "natRem": "rem"}
 
 
 def write_words(exp, path) -> int:

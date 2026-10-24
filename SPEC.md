@@ -241,13 +241,16 @@ type variables and type applications are not spellable in one
   `test_level1::test_a_program_s_own_suc_does_not_change_its_fuel`).
 - **Numeral operations** join the prelude only in a program that names
   one without defining it (`expand.NAT_NAMES`), so no other program's
-  terms change: `natAdd`, `natSub` (truncated at zero) and `natMul` on
-  Scott numerals of any numeral type (below), and the tests
+  terms change: `natAdd`, `natSub` (truncated at zero), `natMul`,
+  `natDiv` and `natRem` (the quotient and the remainder, and by zero 0
+  and `m`, so each is total) on Scott numerals of any numeral type
+  (below), and the tests
   `natIfEq m n x y` and `natIfLe m n x y`, which are `x` when `m = n`
   (`m <= n`) and `y` otherwise, so that no boolean type is assumed. Each
   is `Y` of a generator over the numerals' cases, as the expander ties
   any recursion (`test_nat`). `natMul` is defined by `natAdd`, so naming
-  `natMul` installs `natAdd` too. A runtime may run them natively on numerals
+  `natMul` installs `natAdd` too, and `natDiv` and `natRem`, which step by
+  a test and a subtraction, install `natIfLe` and `natSub`. A runtime may run them natively on numerals
   it holds as numbers (§9 of `RUNTIME-DESIGN.md`).
 - **Booleans** are `K` for yes and `K I` for no.
 - **Numerals** are Scott numerals. A literal `n` is the numeral
@@ -609,7 +612,7 @@ error (`test_types::test_a_function_is_not_a_datum`).
   `fuel` and the datum, and has the result type `R`.
 - **The prelude and the ISA** have schemes: `pair : a -> b -> cell a b`,
   `hd`, `tl`, `nil : list a`, `cons`, `zero : fuel`, `suc`;
-  `natAdd`, `natSub`, `natMul : a -> a -> a` and `natIfEq`,
+  `natAdd`, `natSub`, `natMul`, `natDiv`, `natRem : a -> a -> a` and `natIfEq`,
   `natIfLe : a -> a -> b -> b -> b`, which serve any numeral type: `a`
   carries a *numeral* constraint, as `EQ`'s operands carry the data
   constraint, so a function or a datum of another type is refused there,

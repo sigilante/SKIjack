@@ -500,7 +500,7 @@ class _Types:
         # the numeral operations (expand.NAT_NAMES) serve any numeral type
         # (SPEC.md §4), so their operands are tied to one type that carries
         # the numeral constraint, and a test's two outcomes to one type
-        if name in ("natAdd", "natSub", "natMul"):
+        if name in ("natAdd", "natSub", "natMul", "natDiv", "natRem"):
             a = self.fresh(numeral=True)
             return self.close(_arrows([a, a], a))
         if name in ("natIfEq", "natIfLe"):
