@@ -55,7 +55,8 @@ def _choice(t, env):
 
 
 def test_the_operations_compute_on_small_numerals():
-    exp = _compile("a = natAdd\ns = natSub\nm = natMul\ne = natIfEq\nl = natIfLe\n")
+    exp = _compile("a = natAdd\ns = natSub\nm = natMul\ne = natIfEq\nl = natIfLe\n"
+                   "d = natDiv\nr = natRem\n")
     env = Environment()
     for x in range(4):
         for y in range(4):
@@ -65,6 +66,8 @@ def test_the_operations_compute_on_small_numerals():
             assert _value(ap("m"), env) == x * y
             assert _choice(ap("e"), env) == Atom("xx" if x == y else "yy")
             assert _choice(ap("l"), env) == Atom("xx" if x <= y else "yy")
+            assert _value(ap("d"), env) == (x // y if y else 0)    # by zero: 0
+            assert _value(ap("r"), env) == (x % y if y else x)     # by zero: m
 
 
 def test_a_program_naming_none_is_compiled_as_before():
@@ -83,8 +86,15 @@ def test_only_the_named_operations_and_their_needs_are_installed():
     assert exp.env.lookup("natSub") is None
 
 
+def test_division_installs_the_subtraction_and_the_test_it_steps_by():
+    exp = _compile("d = natDiv\n")
+    assert exp.env.lookup("natSub") is not None and exp.env.lookup("natIfLe") is not None
+    assert exp.env.lookup("natRem") is None and exp.env.lookup("natMul") is None
+
+
 def test_the_operations_templates_abstract_to_their_terms():
-    exp = _compile("a = natAdd\ns = natSub\nm = natMul\ne = natIfEq\nl = natIfLe\n")
+    exp = _compile("a = natAdd\ns = natSub\nm = natMul\ne = natIfEq\nl = natIfLe\n"
+                   "d = natDiv\nr = natRem\n")
     nat = [t for t in templates(exp) if t.name.startswith("nat")]
     assert len(nat) >= 10
     assert all(check(t) for t in nat)
@@ -99,6 +109,10 @@ def test_words_lists_the_prelude_operations_by_hash(tmp_path):
         name = {v: k for k, v in WORD_OPS.items()}[op]
         assert h == structural_hash(ski_expand(Atom(name), exp.env))
         assert int(atoms) > 0 and term
+    rem = _compile("r = natRem\n")
+    assert write_words(rem, tmp_path / "w2.tsv") == 3       # natSub and natIfLe too
+    assert [ln.split("\t")[1] for ln in (tmp_path / "w2.tsv").read_text().splitlines()] == \
+        ["sub", "ifle", "rem"]
 
 
 def test_a_program_defining_its_own_operation_keeps_it(tmp_path):

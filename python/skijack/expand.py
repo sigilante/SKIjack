@@ -87,10 +87,12 @@ PRELUDE_NAMES = ("pair", "hd", "tl", "nil", "cons", "zero", "suc")
 #: program names one and does not define it, so a program that names none
 #: compiles as before.  ``natSub`` truncates at zero; ``natIfEq m n x y`` is
 #: ``x`` when ``m = n``, else ``y``, and ``natIfLe`` the same for ``m <= n``,
-#: so no boolean type is assumed.  A runtime may run them natively on
+#: so no boolean type is assumed.  ``natDiv`` and ``natRem`` are the
+#: quotient and the remainder, and by zero ``natDiv m 0 = 0`` and ``natRem m
+#: 0 = m``, so each is total.  A runtime may run them natively on
 #: numerals it holds as words (avon ``docs/DESIGN.md`` §6.10), identified
 #: by these terms' hashes; see :func:`skijack.templates.write_words`.
-NAT_NAMES = ("natAdd", "natSub", "natMul", "natIfEq", "natIfLe")
+NAT_NAMES = ("natAdd", "natSub", "natMul", "natIfEq", "natIfLe", "natDiv", "natRem")
 
 #: the three primitives.  ``SURFACE-LANGUAGE-DESIGN.md`` §6b keeps two
 #: symbol tables: outside quotation these names are the ISA, inside it
@@ -811,6 +813,8 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
             backend[op] = op
 
         needed = set(nat_ops)
+        if needed & {"natDiv", "natRem"}:
+            needed |= {"natSub", "natIfLe"}   # a step subtracts, after a test
         if "natMul" in needed:
             needed.add("natAdd")              # natMul's successor case adds
         if "natAdd" in needed:
@@ -837,6 +841,19 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
                 ("natIfEqS", (_f, _n, _xx, _yy, _j),
                  K_(v(_n), v(_yy), K_(a("natIfEqT"), v(_f), v(_xx), v(_yy), v(_j)))),
                 ("natIfEqT", (_f, _xx, _yy, _j, _k), K_(v(_f), v(_j), v(_k), v(_xx), v(_yy))),
+            ])
+        if "natDiv" in needed:
+            _rules("natDiv", [                # m / 0 = 0; m / n = n <= m ? (m - n) / n + 1 : 0
+                ("natDivGen", (_f, _m, _n), K_(v(_n), a("\x00zero"), K_(a("natDivS"), v(_f), v(_m), v(_n)))),
+                ("natDivS", (_f, _m, _n, _k),
+                 K_(a("natIfLe"), v(_n), v(_m),
+                    K_(a("\x00suc"), K_(v(_f), K_(a("natSub"), v(_m), v(_n)), v(_n))), a("\x00zero"))),
+            ])
+        if "natRem" in needed:
+            _rules("natRem", [                # m % 0 = m; m % n = n <= m ? (m - n) % n : m
+                ("natRemGen", (_f, _m, _n), K_(v(_n), v(_m), K_(a("natRemS"), v(_f), v(_m), v(_n)))),
+                ("natRemS", (_f, _m, _n, _k),
+                 K_(a("natIfLe"), v(_n), v(_m), K_(v(_f), K_(a("natSub"), v(_m), v(_n)), v(_n)), v(_m))),
             ])
         if "natIfLe" in needed:
             _rules("natIfLe", [
