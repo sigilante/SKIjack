@@ -49,7 +49,7 @@ from .check import check as _check, isa_binders
 from .quote import Encoder, level1_names
 
 __all__ = ["ExpandError", "Expansion", "expand_program", "program_prelude",
-           "PRELUDE_NAMES", "NAT_NAMES",
+           "PRELUDE_NAMES", "NAT_NAMES", "LIST_NAMES",
            "ISA_NAMES", "Level1Program", "FUEL_PLACEHOLDER"]
 
 #: the free atom that stands in for elided fuel, ``<t>@[]`` -- the
@@ -94,6 +94,18 @@ PRELUDE_NAMES = ("pair", "hd", "tl", "nil", "cons", "zero", "suc")
 #: by these terms' hashes; see :func:`skijack.templates.write_words`.
 NAT_NAMES = ("natAdd", "natSub", "natMul", "natIfEq", "natIfLe", "natDiv", "natRem")
 
+#: operations on Scott lists of any *list type* -- a declared type of two
+#: constructors, the first with no fields and the second with two, the
+#: second the type itself -- installed as the numeral operations are.
+#: ``listLength l`` is a numeral; ``listAt l k d`` is the element at index
+#: ``k``, from 0, or ``d`` past the end; ``listAppend l r`` is ``l`` then
+#: ``r``; ``listTake l k`` and ``listDrop l k`` are the first ``k``
+#: elements and the rest, all of them or none past the end.  Each is
+#: total, and builds with the prelude's ``nil`` and ``cons``, which are
+#: every list type's constructors.  A runtime may run them natively on
+#: lists it holds whole (avon ``docs/DESIGN.md`` §6.14).
+LIST_NAMES = ("listLength", "listAt", "listAppend", "listTake", "listDrop")
+
 #: the three primitives.  ``SURFACE-LANGUAGE-DESIGN.md`` §6b keeps two
 #: symbol tables: outside quotation these names are the ISA, inside it
 #: they are the object type's constructors.  Quotation is a later step,
@@ -127,11 +139,12 @@ def _mentions(x, out: Set[str]) -> Set[str]:
 def program_prelude(program: A.Program) -> Tuple[str, ...]:
     """The names installed before ``program`` is seen: the prelude, then
     the numeral operations it names without defining.  The checkers take
-    this list, so a program that names ``natAdd`` checks as it compiles."""
+    this list, so a program that names ``natAdd`` checks as it compiles.
+    The list operations follow the numeral operations."""
     defined = {d.name for d in program.decls
                if isinstance(d, (A.Equation, A.Def, A.Core, A.Macro))}
     mentioned = _mentions(program.decls, set())
-    return PRELUDE_NAMES + tuple(n for n in NAT_NAMES
+    return PRELUDE_NAMES + tuple(n for n in NAT_NAMES + LIST_NAMES
                                  if n in mentioned and n not in defined)
 
 
@@ -862,6 +875,42 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
                 ("natIfLeS", (_f, _n, _xx, _yy, _j),
                  K_(v(_n), v(_yy), K_(a("natIfLeT"), v(_f), v(_xx), v(_yy), v(_j)))),
                 ("natIfLeT", (_f, _xx, _yy, _j, _k), K_(v(_f), v(_j), v(_k), v(_xx), v(_yy))),
+            ])
+        # the list operations: a list l is l n c, n at nil and c h t at a
+        # cons; they build with the prelude's nil and cons under names no
+        # source can spell, as the numeral operations count
+        _l, _r, _d, _h, _t = "\x00l", "\x00r", "\x00d", "\x00h", "\x00t"
+        _cn, _cc = "\x00cn", "\x00cc"
+        if needed & set(LIST_NAMES):
+            env.define_rule("\x00nil", (_cn, _cc), v(_cn))
+            env.define_rule("\x00cons", (_h, _t, _cn, _cc), K_(v(_cc), v(_h), v(_t)))
+        if "listLength" in needed:
+            _rules("listLength", [            # |nil| = 0; |h : t| = |t| + 1
+                ("listLengthGen", (_f, _l), K_(v(_l), a("\x00zero"), K_(a("listLengthS"), v(_f)))),
+                ("listLengthS", (_f, _h, _t), K_(a("\x00suc"), K_(v(_f), v(_t)))),
+            ])
+        if "listAt" in needed:
+            _rules("listAt", [                # nil @ k = d; (h : t) @ 0 = h; (h : t) @ (j+1) = t @ j
+                ("listAtGen", (_f, _l, _k, _d), K_(v(_l), v(_d), K_(a("listAtS"), v(_f), v(_k), v(_d)))),
+                ("listAtS", (_f, _k, _d, _h, _t), K_(v(_k), v(_h), K_(a("listAtT"), v(_f), v(_t), v(_d)))),
+                ("listAtT", (_f, _t, _d, _j), K_(v(_f), v(_t), v(_j), v(_d))),
+            ])
+        if "listAppend" in needed:
+            _rules("listAppend", [            # nil ++ r = r; (h : t) ++ r = h : (t ++ r)
+                ("listAppendGen", (_f, _l, _r), K_(v(_l), v(_r), K_(a("listAppendS"), v(_f), v(_r)))),
+                ("listAppendS", (_f, _r, _h, _t), K_(a("\x00cons"), v(_h), K_(v(_f), v(_t), v(_r)))),
+            ])
+        if "listTake" in needed:
+            _rules("listTake", [              # take 0 = nil; take (j+1) nil = nil; take (j+1) (h : t) = h : take j t
+                ("listTakeGen", (_f, _l, _k), K_(v(_k), a("\x00nil"), K_(a("listTakeS"), v(_f), v(_l)))),
+                ("listTakeS", (_f, _l, _j), K_(v(_l), a("\x00nil"), K_(a("listTakeT"), v(_f), v(_j)))),
+                ("listTakeT", (_f, _j, _h, _t), K_(a("\x00cons"), v(_h), K_(v(_f), v(_t), v(_j)))),
+            ])
+        if "listDrop" in needed:
+            _rules("listDrop", [              # drop 0 l = l; drop (j+1) nil = nil; drop (j+1) (h : t) = drop j t
+                ("listDropGen", (_f, _l, _k), K_(v(_k), v(_l), K_(a("listDropS"), v(_f), v(_l)))),
+                ("listDropS", (_f, _l, _j), K_(v(_l), a("\x00nil"), K_(a("listDropT"), v(_f), v(_j)))),
+                ("listDropT", (_f, _j, _h, _t), K_(v(_f), v(_t), v(_j))),
             ])
 
     # --- backend names.  Program-level names (constructors, top-level
