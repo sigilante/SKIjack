@@ -8,6 +8,14 @@ copy mode: the reference host's algorithm in C, whose contraction counts,
 statuses and terms are aviary's.  ``SKIJACK_REDUCER=check`` runs every
 reduction both ways and raises :class:`AvonMismatch` on any difference.
 
+``SKIJACK_AVON_STRATEGY=share`` runs Avon in its share mode instead:
+graph reduction, each argument reduced once however often it is used,
+so a program that uses a value twice computes it once.  A normal form is
+the same term, but a weak head normal form may hold arguments already
+reduced, and the contraction counts and the fuel's stopping point are
+Avon's own, not aviary's; ``check`` compares counts, so it takes copy
+mode alone.
+
 Avon reduces S, K and I and nothing else, so a term goes to Avon only
 when each of its leaves means there what it means in the environment
 given: S, K and I as the default environment defines them, and every
@@ -46,6 +54,9 @@ _MAX_NODES = 1 << 30
 
 #: the most batch processes kept open at once, one per mode and bound
 _POOL = 8
+
+#: Avon's strategies: ``copy``, aviary's algorithm, and ``share``
+STRATEGIES = ("copy", "share")
 
 _PRIMITIVES = ("S", "K", "I")
 _DEFAULT = Environment()
@@ -146,10 +157,13 @@ def _decode(text: str, back: Dict[str, Atom]):
 
 
 class AvonReducer:
-    """Reductions run by an ``avon`` binary, in copy mode."""
+    """Reductions run by an ``avon`` binary, in copy mode or share mode."""
 
-    def __init__(self, avon: str):
+    def __init__(self, avon: str, strategy: str = "copy"):
+        if strategy not in STRATEGIES:
+            raise AvonError(f"strategy {strategy!r}: copy or share")
         self.avon = avon
+        self.strategy = strategy
         self._procs: Dict[Tuple[bool, Optional[int], Optional[int]],
                           Tuple["subprocess.Popen[str]", IO[str]]] = {}
         self.runs = 0
@@ -187,7 +201,7 @@ class AvonReducer:
                 proc.stdin.close()
             proc.wait()
             err.close()
-        args = [self.avon, "batch", "--strategy=copy", "--dag",
+        args = [self.avon, "batch", f"--strategy={self.strategy}", "--dag",
                 f"--budget={_MAX_NODES}"]
         if whnf_only:
             args.append("--whnf")
@@ -273,7 +287,8 @@ _mode: Optional[str] = None
 def reducer() -> Tuple[Optional[str], Optional[AvonReducer]]:
     """The mode ``SKIJACK_REDUCER`` names (``aviary``, ``avon`` or
     ``check``) and, unless it is ``aviary``, the Avon reducer ``AVON``
-    names.  Read once."""
+    names, in the strategy ``SKIJACK_AVON_STRATEGY`` names (``copy``, the
+    default, or ``share``).  Read once."""
     global _reducer, _mode
     if _mode is None:
         mode = os.environ.get("SKIJACK_REDUCER", "aviary").strip() or "aviary"
@@ -283,6 +298,12 @@ def reducer() -> Tuple[Optional[str], Optional[AvonReducer]]:
             avon = os.environ.get("AVON")
             if not avon:
                 raise AvonError(f"SKIJACK_REDUCER={mode} needs AVON, the path of an avon binary")
-            _reducer = AvonReducer(avon)
+            strategy = os.environ.get("SKIJACK_AVON_STRATEGY", "copy").strip() or "copy"
+            if strategy not in STRATEGIES:
+                raise AvonError(f"SKIJACK_AVON_STRATEGY={strategy!r}: copy or share")
+            if mode == "check" and strategy != "copy":
+                raise AvonError("SKIJACK_REDUCER=check compares aviary's counts, "
+                                "so it takes SKIJACK_AVON_STRATEGY=copy")
+            _reducer = AvonReducer(avon, strategy)
         _mode = mode
     return _mode, _reducer

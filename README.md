@@ -72,6 +72,8 @@ build it (`make` in an Avon checkout) and name the binary.
     export AVON=/path/to/avon/build/avon
     SKIJACK_REDUCER=avon  skijack FILE --run NAME      # reduced by Avon
     SKIJACK_REDUCER=check skijack FILE --run NAME      # by both, compared
+    SKIJACK_REDUCER=avon SKIJACK_AVON_STRATEGY=share skijack FILE --run NAME
+                                                       # by Avon, sharing
 
 Avon runs in its copy mode, the reference host's algorithm, so every
 status, contraction count and term is aviary's; `check` runs each
@@ -79,6 +81,12 @@ reduction both ways and stops at the first difference. A term holding a
 live aviary bird (`B`, `C`, `Y`, ...) stays with aviary, since Avon reduces
 S, K and I alone. The whole suite passes in each mode, and CI runs it under
 `check` against Avon. `python/skijack/avon.py` is the bridge.
+
+`SKIJACK_AVON_STRATEGY=share` runs Avon's share mode, graph reduction,
+in which an argument used twice is reduced once. A program that copies a
+value runs in far fewer contractions: the same normal form, but its own
+counts, and a weak head normal form that may hold arguments already
+reduced. `check` compares aviary's counts, so it refuses share mode.
 
 The suite is self-contained: the four oracle scripts from
 `artifact-metacircular-ski` are vendored under `python/tests/artifact/` (provenance in the
