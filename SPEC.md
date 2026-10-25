@@ -252,6 +252,16 @@ type variables and type applications are not spellable in one
   `natMul` installs `natAdd` too, and `natDiv` and `natRem`, which step by
   a test and a subtraction, install `natIfLe` and `natSub`. A runtime may run them natively on numerals
   it holds as numbers (§9 of `RUNTIME-DESIGN.md`).
+- **List operations** join the prelude the same way (`expand.LIST_NAMES`),
+  on Scott lists of any *list type* — a declared type of two
+  constructors, the first with no fields and the second with two, the
+  second the type itself, whatever their names: `listLength l`, a
+  numeral; `listAt l k d`, the element at index `k` from 0, or `d` past
+  the end; `listAppend l r`; and `listTake l k` and `listDrop l k`, the
+  first `k` elements and the rest, all or none past the end. Each is
+  total and is `Y` of a generator over the list's cases, and each builds
+  with the prelude's `nil` and `cons` terms, which are every list type's
+  constructors, so a result is a value of its operand's type (`test_list`).
 - **Booleans** are `K` for yes and `K I` for no.
 - **Numerals** are Scott numerals. A literal `n` is the numeral
   `suc (suc … zero)` with `n` applications, built from the prelude's own
@@ -616,7 +626,13 @@ error (`test_types::test_a_function_is_not_a_datum`).
   `natIfLe : a -> a -> b -> b -> b`, which serve any numeral type: `a`
   carries a *numeral* constraint, as `EQ`'s operands carry the data
   constraint, so a function or a datum of another type is refused there,
-  through an alias and a binder too
+  through an alias and a binder too; and `listLength : l -> n`,
+  `listAt : l -> n -> e -> e`, `listAppend : l -> l -> l`, `listTake`,
+  `listDrop : l -> n -> l`, where `n` carries the numeral constraint and
+  `l` a *list* constraint naming `e`: a list type whose element type is
+  `e`, the prelude's `list e`, or an unknown datum eliminated as one
+  (`test_list::test_the_element_is_the_list_type_s`,
+  `test_list::test_the_list_constraint_holds_through_an_alias_and_a_binder`)
   (`test_types::test_a_numeral_operation_refuses_a_function`,
   `test_types::test_the_numeral_constraint_holds_through_an_alias_and_a_binder`); `S`, `K`,
   `I`, `B`, `C`, `W`, `Y` their standard ones. An axis pick projects

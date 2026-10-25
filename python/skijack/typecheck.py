@@ -46,6 +46,11 @@ components, and a program's own ``EQ`` carries it in its scheme, so it
 holds through an alias (``eq = EQ``) and wherever ``EQ`` is passed.
 The operands of the numeral operations carry a *numeral* constraint in
 the same way: a numeral type, or an unknown datum that must become one.
+The list operations' lists carry a *list* constraint, which names their
+element type: a list type (two constructors, the first with no fields
+and the second with two, the second the type itself) whose first field
+is the element type, the prelude's ``list``, or an unknown datum
+eliminated as a list of those elements.
 
 A declaration whose inference outruns the host's recursion limit is
 refused with a ``TypeMismatchError``, never a crash.
@@ -80,6 +85,7 @@ class TVar:
     data: bool = False          #: an operand of EQ: may never be a function
     ref: Optional["Type"] = None
     numeral: bool = False       #: an operand of a numeral operation: a numeral
+    elem: Optional["Type"] = None   #: a list operation's list: a list of these
 
 
 @dataclass(frozen=True, eq=False)
@@ -150,6 +156,7 @@ class Scheme:
     data: Tuple[int, ...]       #: those of them that carry the data constraint
     type: Type
     numeral: Tuple[int, ...] = ()   #: and those that carry the numeral constraint
+    elems: Tuple[Tuple[int, "Type"], ...] = ()   #: and the list constraint, with its element
 
 
 def resolve(t: Type) -> Type:
@@ -213,9 +220,10 @@ class _Types:
 
     # ---- variables and schemes (every walker is cycle-safe)
 
-    def fresh(self, data: bool = False, numeral: bool = False) -> TVar:
+    def fresh(self, data: bool = False, numeral: bool = False,
+              elem: Optional[Type] = None) -> TVar:
         self.next_id += 1
-        return TVar(self.next_id, data, numeral=numeral)
+        return TVar(self.next_id, data, numeral=numeral, elem=elem)
 
     def instantiate(self, s: Scheme) -> Type:
         # a scheme with nothing quantified is still copied: unification
@@ -242,6 +250,8 @@ class _Types:
                              t.checked, t.numeral)
             hole.ref = new
             return new
+        for k, et in s.elems:
+            sub[k].elem = go(et)
         return go(s.type)
 
     def free(self, t: Type, out: Dict[int, TVar], seen: Optional[Set[int]] = None) -> None:
@@ -249,6 +259,9 @@ class _Types:
         t = resolve(t)
         if isinstance(t, TVar):
             out[t.id] = t
+            if t.elem is not None and id(t) not in seen:
+                seen.add(id(t))
+                self.free(t.elem, out, seen)
             return
         if id(t) in seen:
             return
@@ -278,14 +291,16 @@ class _Types:
         env_fv = self.env_free()
         qs = tuple(sorted(k for k in fv if k not in env_fv))
         return Scheme(qs, tuple(k for k in qs if fv[k].data), t,
-                      tuple(k for k in qs if fv[k].numeral))
+                      tuple(k for k in qs if fv[k].numeral),
+                      tuple((k, e) for k in qs if (e := fv[k].elem) is not None))
 
     def close(self, t: Type) -> Scheme:
         fv: Dict[int, TVar] = {}
         self.free(t, fv)
         qs = tuple(sorted(fv))
         return Scheme(qs, tuple(k for k in qs if fv[k].data), t,
-                      tuple(k for k in qs if fv[k].numeral))
+                      tuple(k for k in qs if fv[k].numeral),
+                      tuple((k, e) for k in qs if (e := fv[k].elem) is not None))
 
     # ---- the Scott scheme of a datum: what it is when applied
 
@@ -324,6 +339,8 @@ class _Types:
             self.require_data(t)
         if v.numeral:
             self.require_numeral(t)
+        if v.elem is not None:
+            self.require_list(t, v.elem)
         v.ref = t
 
     def require_data(self, t: Type, seen: Optional[Set[int]] = None) -> None:
@@ -364,6 +381,38 @@ class _Types:
                 self.nominate(t, t.nominal)
         elif not self.is_numeral(t.name):
             raise _Fail(f"expected a numeral, found {render_type(t)}")
+
+    def list_types(self) -> Dict[str, str]:
+        """The declared list types, each by its element type's name."""
+        return {d.name: d.ctors[1].fields[0] for d in self.types.values()
+                if len(d.ctors) == 2 and not d.ctors[0].fields
+                and len(d.ctors[1].fields) == 2 and d.ctors[1].fields[1] == d.name}
+
+    def require_list(self, t: Type, elem: Type) -> None:
+        """The list constraint: ``t`` is a list of ``elem`` -- a list type
+        whose element is ``elem``, the prelude's ``list``, or an unknown
+        datum that must become one."""
+        t = resolve(t)
+        if isinstance(t, TVar):
+            if t.elem is None:
+                t.elem = elem
+            else:
+                self.unify(t.elem, elem)
+        elif isinstance(t, TArrow):
+            if not t.elim:
+                raise _Fail(f"a function ({render_type(t)}) where a list is "
+                            f"expected; a function is not a datum")
+            # eliminated as a list: nil's continuation, then a cons's of
+            # an element and a list of the same elements
+            r = self.fresh()
+            spine = TArrow(r, TArrow(_arrows([elem, self.fresh(elem=elem)], r), r), elim=True)
+            self.unify(t, spine)
+        elif t.name == "list":
+            self.unify(t.args[0], elem)
+        elif t.name in self.list_types():
+            self.unify(self.field(self.list_types()[t.name]), elem)
+        else:
+            raise _Fail(f"expected a list, found {render_type(t)}")
 
     def nominate(self, arrow: TArrow, name: str) -> None:
         """Commit an elimination arrow to the type ``name``."""
@@ -506,6 +555,16 @@ class _Types:
         if name in ("natIfEq", "natIfLe"):
             a, b = self.fresh(numeral=True), v()
             return self.close(_arrows([a, a, b, b], b))
+        # the list operations (expand.LIST_NAMES) serve any list type: the
+        # list carries the list constraint, which names its element
+        if name in ("listLength", "listAt", "listAppend", "listTake", "listDrop"):
+            e = v()
+            ls, n = self.fresh(elem=e), self.fresh(numeral=True)
+            return self.close({"listLength": TArrow(ls, n),
+                               "listAt": _arrows([ls, n, e], e),
+                               "listAppend": _arrows([ls, ls], ls),
+                               "listTake": _arrows([ls, n], ls),
+                               "listDrop": _arrows([ls, n], ls)}[name])
         return None
 
     # ---- inference over macro-expanded bodies
