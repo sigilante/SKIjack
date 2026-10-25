@@ -63,8 +63,9 @@ def fast_reduce(term, env, *, whnf_only=True, max_steps=10 ** 6,
     costs more than the reduction it protects, and ``max_steps`` already
     bounds the run.
 
-    With ``SKIJACK_REDUCER=avon`` the run goes to Avon's copy mode
-    instead, and with ``check`` to both, compared (:mod:`skijack.avon`).
+    With ``SKIJACK_REDUCER=avon`` the run goes to Avon instead, in copy
+    mode or, with ``SKIJACK_AVON_STRATEGY=share``, share mode; with
+    ``check`` to both, compared (:mod:`skijack.avon`).
     """
     mode, avon = _avon.reducer()
     if avon is not None:

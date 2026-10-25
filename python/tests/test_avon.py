@@ -97,3 +97,51 @@ def test_a_term_with_a_bird_is_not_sent():
         assert r.runs == 0
     finally:
         r.close()
+
+
+def _nf(term):
+    """The normal form as aviary gives it."""
+    return _aviary_reduce(term, Environment(), whnf_only=False, max_steps=10 ** 6,
+                          max_size=10 ** 9).term
+
+
+@needs_avon
+@pytest.mark.parametrize("term", [t for t, whnf, fuel in CASES if fuel >= 10 and not
+                                  A.same_term(t, ap(S, I, I, ap(S, I, I)))])
+def test_share_mode_reaches_aviary_s_normal_form(term):
+    r = A.AvonReducer(AVON, "share")
+    try:
+        got = r.reduce(term, Environment(), whnf_only=False, max_steps=10 ** 6)
+    finally:
+        r.close()
+    assert got.status.name == "NORMAL" and A.same_term(got.term, _nf(term))
+
+
+@needs_avon
+def test_share_mode_computes_a_shared_argument_once():
+    """S I I x uses x twice: copy mode reduces it twice, share mode once."""
+    x = ap(S, K, K, ap(S, K, K, ap(S, K, K, Atom("y"))))
+    term = ap(S, I, I, x)
+    steps = {}
+    for strategy in A.STRATEGIES:
+        r = A.AvonReducer(AVON, strategy)
+        try:
+            steps[strategy] = r.reduce(term, Environment(), whnf_only=False).steps
+        finally:
+            r.close()
+    assert steps["share"] < steps["copy"]
+
+
+def test_an_unknown_strategy_is_refused():
+    with pytest.raises(A.AvonError, match="copy or share"):
+        A.AvonReducer("avon", "lazy")
+
+
+def test_check_takes_copy_mode_alone(monkeypatch):
+    monkeypatch.setattr(A, "_mode", None)
+    monkeypatch.setattr(A, "_reducer", None)
+    monkeypatch.setenv("SKIJACK_REDUCER", "check")
+    monkeypatch.setenv("AVON", "avon")
+    monkeypatch.setenv("SKIJACK_AVON_STRATEGY", "share")
+    with pytest.raises(A.AvonError, match="takes SKIJACK_AVON_STRATEGY=copy"):
+        A.reducer()
