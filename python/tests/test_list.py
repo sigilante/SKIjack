@@ -115,6 +115,18 @@ def test_a_result_list_is_the_program_s_own_type():
     assert _value(exp.terms["y"], env) == 3
 
 
+def test_the_operations_build_with_the_prelude_s_constructors():
+    """nil and cons are aliases of closed terms, every list type's
+    constructors, and no template: templates.tsv names only what a
+    source can spell."""
+    from aviary_kernel.terms import pretty
+    from skijack.expand import CONS_TERM, NIL_TERM
+    exp = _compile(OPS)
+    assert pretty(CONS_TERM) == pretty(exp.terms["TCons"])
+    assert pretty(NIL_TERM) == pretty(exp.terms["TNil"])
+    assert not any("\x00" in t.name for t in templates(exp))
+
+
 def test_a_program_naming_none_is_compiled_as_before():
     exp = _compile("x = TCons Zero TNil\n")
     assert not set(LIST_NAMES) & set(exp.terms)

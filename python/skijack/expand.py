@@ -468,6 +468,18 @@ ZERO_TERM: Term = a("K")
 SUC_TERM: Term = K_(a("S"), K_(a("K"), a("K")),
                     K_(a("S"), K_(a("K"), K_(a("S"), a("I"))), a("K")))
 
+#: the prelude's ``nil`` and ``cons``, as closed terms: what every list
+#: type's constructors compile to, ``\n c. n`` and ``\h t n c. c h t``
+NIL_TERM: Term = a("K")
+CONS_TERM: Term = K_(
+    a("S"), K_(a("K"), K_(a("S"), K_(a("K"), a("K")))),
+    K_(a("S"),
+       K_(a("S"), K_(a("K"), a("S")),
+          K_(a("S"), K_(a("K"), a("K")),
+             K_(a("S"), K_(a("K"), a("S")),
+                K_(a("S"), K_(a("K"), K_(a("S"), a("I"))), a("K"))))),
+       K_(a("K"), a("K"))))
+
 
 def numeral(n: int) -> Term:
     """The literal ``n``: ``suc`` applied ``n`` times to ``zero``, built
@@ -877,13 +889,12 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
                 ("natIfLeT", (_f, _xx, _yy, _j, _k), K_(v(_f), v(_j), v(_k), v(_xx), v(_yy))),
             ])
         # the list operations: a list l is l n c, n at nil and c h t at a
-        # cons; they build with the prelude's nil and cons under names no
-        # source can spell, as the numeral operations count
+        # cons; they build with the prelude's nil and cons, as terms under
+        # names no source can spell, as the numeral operations count
         _l, _r, _d, _h, _t = "\x00l", "\x00r", "\x00d", "\x00h", "\x00t"
-        _cn, _cc = "\x00cn", "\x00cc"
         if needed & set(LIST_NAMES):
-            env.define_rule("\x00nil", (_cn, _cc), v(_cn))
-            env.define_rule("\x00cons", (_h, _t, _cn, _cc), K_(v(_cc), v(_h), v(_t)))
+            env.define_alias("\x00nil", NIL_TERM)
+            env.define_alias("\x00cons", CONS_TERM)
         if "listLength" in needed:
             _rules("listLength", [            # |nil| = 0; |h : t| = |t| + 1
                 ("listLengthGen", (_f, _l), K_(v(_l), a("\x00zero"), K_(a("listLengthS"), v(_f)))),
