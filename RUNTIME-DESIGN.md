@@ -376,7 +376,10 @@ its term. Avon's data jets (`avon/docs/DESIGN.md` §6.10) hold numerals as
 numbers and run these natively on them, after checking each term against
 its hash and running it on small numerals. An operation another needs is
 listed with it: `natMul` adds with `natAdd`. A program's own `natAdd` is
-its code and is never listed.
+its code and is never listed. The list operations are listed the same
+way, `listLength`, `listAt`, `listAppend`, `listTake` and `listDrop` as
+`len`, `at`, `app`, `take` and `drop`, for a runtime that holds lists
+whole (`avon/docs/DESIGN.md` §6.14).
 
 ## 10. Inlining: fewer calls, the same values
 

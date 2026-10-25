@@ -10,7 +10,10 @@ from aviary_kernel.terms import App, Atom
 
 import skijack
 from skijack.expand import LIST_NAMES
-from skijack.templates import check, templates, write_words
+from aviary_kernel.abstraction import expand as ski_expand
+
+from skijack.dictionary import structural_hash
+from skijack.templates import WORD_OPS, check, templates, write_words
 from skijack.typecheck import TypeMismatchError
 
 TYPES = ("nat === Zero | Suc nat\n"
@@ -133,11 +136,15 @@ def test_the_operations_templates_abstract_to_their_terms():
     assert all(check(t) for t in ts)
 
 
-def test_words_lists_no_list_operation_yet(tmp_path):
-    """A runtime replaces only the operations words.tsv names, and none
-    runs lists natively yet."""
+def test_words_lists_the_list_operations_by_hash(tmp_path):
     exp = _compile(OPS)
-    assert write_words(exp, tmp_path / "words.tsv") == 0
+    assert write_words(exp, tmp_path / "words.tsv") == 5
+    rows = [ln.split("\t") for ln in (tmp_path / "words.tsv").read_text().splitlines()]
+    assert [r[1] for r in rows] == ["len", "at", "app", "take", "drop"]
+    for h, op, atoms, term in rows:
+        name = {v: k for k, v in WORD_OPS.items()}[op]
+        assert h == structural_hash(ski_expand(Atom(name), exp.env))
+        assert int(atoms) > 0 and term
 
 
 def test_a_program_defining_its_own_operation_keeps_it():

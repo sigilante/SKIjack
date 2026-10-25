@@ -243,15 +243,18 @@ def write(ts: List[Template], templates_path, terms_path) -> Tuple[int, int]:
     return len(lines), len(rows)
 
 
-#: the numeral operations Avon runs on words, by the name ``words.tsv`` gives
+#: the numeral and list operations Avon runs on words, by the name
+#: ``words.tsv`` gives
 WORD_OPS = {"natAdd": "add", "natSub": "sub", "natMul": "mul",
-            "natIfEq": "ifeq", "natIfLe": "ifle", "natDiv": "div", "natRem": "rem"}
+            "natIfEq": "ifeq", "natIfLe": "ifle", "natDiv": "div", "natRem": "rem",
+            "listLength": "len", "listAt": "at", "listAppend": "app",
+            "listTake": "take", "listDrop": "drop"}
 
 
 def write_words(exp, path) -> int:
     """Write ``words.tsv``: ``hash op atoms printed-term`` for each numeral
-    operation (``expand.NAT_NAMES``) the expansion defines, in the order
-    of :data:`WORD_OPS`.  Avon checks each term against its hash and admits
+    or list operation (``expand.NAT_NAMES``, ``expand.LIST_NAMES``) the
+    expansion defines, in the order of :data:`WORD_OPS`.  Avon checks each term against its hash and admits
     the operation only after running it on small numerals; none is
     written, and no file, when the program names none.  The line count."""
     env = exp.env
