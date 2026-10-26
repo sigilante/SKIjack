@@ -677,6 +677,9 @@ Stated explicitly:
   program (§7);
 - qualified names resolve to nothing; segment payloads and path-typed
   expressions are refused; mount tables are not built (§8);
+- effects beyond entropy's are not standard: the drivers for writing,
+  reading, the environment, a clock and an exit are proposed in
+  `RUNTIME-DESIGN.md` §3e, and bind nothing until §4.1 adopts them;
 - there is no binary integer type, only the unary literal (§4); there
   is no standard subject and therefore no `EQ` and no shared quoted
   library — a name used twice inside one
