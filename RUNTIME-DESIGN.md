@@ -171,6 +171,68 @@ preserved by the bitstring; a runtime that needs it (snapshots of
 reduced states, whose tree unfoldings are exponential) uses its own
 hash-consed image format and the bitstring for interchange only.
 
+## 3e. Drivers: effects every front end shares
+
+*Proposed and decided 2026-10-26.
+Avon's side, with the decisions and their reasons, is
+`avon/docs/DESIGN.md` §9.2; SKIlark's first use is its `PLAN.md` stage 15.
+Nothing here is built.*
+
+**A kernel does I/O by emitting cards in one shape, and the runtime
+performs them.** No front end then needs a host of its own. §3b's kernel
+already returns `[effects kernel']`, and `SPEC.md` §4.1 fixes a card shape
+for entropy. This note extends that shape to the effects a command-line
+program needs, as Vere's drivers perform Gall's cards without knowing the
+agent's language. A front end that emits SKIjack's kernel shape, whether
+SKIlark today or a Jock or a Hoon front end later, emits the same cards.
+
+**The shapes, for a kernel booted with drivers:**
+
+- **Effects** are a list (`nil`, `cons`) of cards `[tag data]`, `tag` a
+  numeral, as `SPEC.md` §4.1 has them.
+- **A reply** is the event `[0 [id answer]]`, `id` the numeral the kernel
+  put in its request. Event tag 0 stays the runtime's.
+- **Bytes** are lists of numerals from 0 to 255.
+
+| tag | card | reply |
+|---|---|---|
+| 0 | `[0 id]`: 128 bits of entropy (`SPEC.md` §4.1) | `[0 [id bits]]` |
+| 1 | `[1 [fd bytes]]`: write to standard output (1) or error (2) | none |
+| 2 | `[2 [id [fd max]]]`: read at most `max` bytes of standard input (0) | `[0 [id bytes]]`, `nil` at its end |
+| 3 | `[3 [id name]]`: an environment variable | `[0 [id v]]`: `nil` unset, `cons value nil` set |
+| 4 | `[4 id]`: the contractions the run has taken, a numeral, in place of a clock until binary numerals | `[0 [id steps]]` |
+| 5 | `[5 code]`: exit with status `code`, after the cards before it | none |
+
+**Only a program run as a kernel has drivers.** Most SKIjack programs
+are plain terms, reduced to a value and printed, and they stay so. A
+kernel is a cell `[battery state]` that no shape tells from another
+value, so a runtime asks to be told: Avon's `avon run --kernel`, beside
+`avon run` for a plain program.
+
+**A run starts with its arguments.** The first event is
+`[0 [0 [argv bits]]]`, `argv` the arguments as byte strings with the
+program's name first, and `bits` the entropy reply's 128 bits, or `nil` for
+a kernel booted without entropy.
+
+**The runtime performs cards in list order**, answers each request with a
+reply poked when the walk reaches it, and queues the reply's own cards
+behind those not yet performed. A card it does not know passes through
+untouched. It logs every answer before applying it, and performs no
+effect when it replays, so a replayed run sees the same input and prints
+nothing twice.
+
+**The reference host gains the same drivers.** The loop of `test_examples`
+that pokes `kernel-events` becomes a small host in Python. That host
+answers from a fixed world, of input bytes, arguments and an environment,
+and counts steps as Avon's copy mode does. It is the oracle that Avon's drivers are checked against, as
+it is for kernels now. The shapes move into `SPEC.md` §4.1 beside entropy's
+with the first runtime that performs them. Until then they bind nothing.
+
+**What stays with the program.** Printing a value and parsing input are the
+front end's work, in SKI: a driver moves bytes and never learns a syntax.
+Reading follows `read(2)`, so a kernel that wants a line or a token
+buffers what it has not used.
+
 ## 4. Architecture, in the order it should be built
 
 1. **Graph reducer.** Nodes are `S`, `K`, `I`, `App`, plus an
