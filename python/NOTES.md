@@ -70,6 +70,12 @@ decisions below, is `SPEC.md` there.
   §8–§10: words to numbers two ways, full ASCII as a type with a digit
   parser, and an event type with a kernel the runtime pokes; sizes and
   read-back values pinned.
+* `tests/test_drivers.py` — the reference drivers of `SPEC.md` §4.1:
+  three kernels run as programs over a fixed world, for echoing input in
+  `read(2)`'s pieces, the arguments, a variable unset or empty, the step
+  count, an exit with the cards after it untaken, a card passed through,
+  and entropy only with it; replay performs nothing and reaches the same
+  kernel.
 
 ### The measured values, reproduced
 

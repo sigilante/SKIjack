@@ -173,10 +173,10 @@ hash-consed image format and the bitstring for interchange only.
 
 ## 3e. Drivers: effects every front end shares
 
-*Proposed and decided 2026-10-26.
-Avon's side, with the decisions and their reasons, is
-`avon/docs/DESIGN.md` §9.2; SKIlark's first use is its `PLAN.md` stage 15.
-Nothing here is built.*
+*Proposed and decided 2026-10-26; the shapes are `SPEC.md` §4.1's, and
+the reference host's drivers are `skijack.drivers`. Avon's side, with
+the decisions and their reasons, is `avon/docs/DESIGN.md` §9.2; SKIlark's
+first use is its `PLAN.md` stage 15.*
 
 **A kernel does I/O by emitting cards in one shape, and the runtime
 performs them.** No front end then needs a host of its own. §3b's kernel
@@ -221,12 +221,10 @@ untouched. It logs every answer before applying it, and performs no
 effect when it replays, so a replayed run sees the same input and prints
 nothing twice.
 
-**The reference host gains the same drivers.** The loop of `test_examples`
-that pokes `kernel-events` becomes a small host in Python. That host
-answers from a fixed world, of input bytes, arguments and an environment,
-and counts steps as Avon's copy mode does. It is the oracle that Avon's drivers are checked against, as
-it is for kernels now. The shapes move into `SPEC.md` §4.1 beside entropy's
-with the first runtime that performs them. Until then they bind nothing.
+**The reference host has the same drivers.** `skijack.drivers.run_kernel`
+runs a kernel over a fixed `World` of input bytes, arguments, an
+environment and entropy, and counts steps as Avon's copy mode does. It is
+the oracle that Avon's drivers are checked against (`test_drivers`).
 
 **What stays with the program.** Printing a value and parsing input are the
 front end's work, in SKI: a driver moves bytes and never learns a syntax.
