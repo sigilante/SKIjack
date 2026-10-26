@@ -356,6 +356,47 @@ comes on request rather than with every event because most events need
 none, and a proof of a poke carries its whole event as private witness
 (`avon/docs/DESIGN.md` §9.1).
 
+**Drivers.** A kernel run as a program, rather than as a service of
+events, does its I/O through cards that a runtime performs. A runtime
+offers drivers only to a kernel booted for them (the reference host:
+`skijack.drivers.run_kernel`; Avon: `avon run --kernel`), and every
+program not so booted is a plain term, reduced and printed as before.
+The shapes are entropy's, extended:
+
+| tag | card | the runtime | reply |
+|---|---|---|---|
+| 0 | `[0 id]` | 128 bits, only under entropy | `[0 [id bits]]` |
+| 1 | `[1 [fd bytes]]` | writes to `fd` 1 or 2 | none |
+| 2 | `[2 [id [fd max]]]` | reads at most `max` bytes, `max` at least 1, of `fd` 0 | `[0 [id bytes]]`, `nil` at the end |
+| 3 | `[3 [id name]]` | looks up an environment variable | `[0 [id v]]`, `v` `nil` if unset, `cons value nil` if set |
+| 4 | `[4 id]` | counts the contractions of every poke so far | `[0 [id steps]]` |
+| 5 | `[5 code]` | ends the run with status `code`, 0 to 255 | none |
+
+- **Bytes** are lists of numerals from 0 to 255; `id` is any term with a
+  normal form, which the reply carries.
+- **Boot's reply** is `[0 [0 [argv bits]]]`: `argv` the arguments as
+  byte lists, the program's name first, and `bits` boot's 128 bits under
+  entropy, `nil` without.
+- **The walk is first in, first out.** The runtime takes a poke's cards
+  in list order, writes when it reaches a write, and answers a request
+  with a reply poked then and there; the reply's cards queue behind
+  those not yet taken. The step count is the one when the walk reaches
+  its card. The run ends at an exit card, the cards after it untaken, or
+  with status 0 when the queue empties; fuel bounds each poke and nothing
+  else bounds the run.
+- **A card of no driver's shape passes through untouched**, a write
+  whose bytes are not all numerals below 256 included: nothing of it is
+  written.
+- **Every reply is logged before it is applied,** and a replay applies
+  the log and performs nothing, so a replayed run reads the same input
+  and prints nothing twice.
+
+The step count stands in for a clock until binary numerals: it is a
+numeral, unary, and replay recounts it. A card list holds cells of
+different types, which Stage B (§9b) has no type for, so a kernel with
+drivers compiles with checking off until the standard subject gives
+cards a type (`test_drivers`).
+
 ## 5. Names and tiers
 
 Names resolve in a compile-time table and are gone before anything runs.
@@ -677,9 +718,10 @@ Stated explicitly:
   program (§7);
 - qualified names resolve to nothing; segment payloads and path-typed
   expressions are refused; mount tables are not built (§8);
-- effects beyond entropy's are not standard: the drivers for writing,
-  reading, the environment, a clock and an exit are proposed in
-  `RUNTIME-DESIGN.md` §3e, and bind nothing until §4.1 adopts them;
+- the drivers (§4.1) read and write standard input, output and error
+  only, with no files by path, timers, network or `system`; their
+  clock is a step count until binary numerals; a kernel that uses them
+  does not pass Stage B;
 - there is no binary integer type, only the unary literal (§4); there
   is no standard subject and therefore no `EQ` and no shared quoted
   library — a name used twice inside one
