@@ -67,6 +67,13 @@ poke k ev = [(answer (6@ev) (7@ev)) [(2@k) (3@k)]]
 kernel := [[poke [peek load]] 0]
 """
 
+# Asks for the step count (id 1) and exits with it as its status.
+STEPS = DOOR + """
+answer id a = id (cons [4 1] nil) (K (cons [5 a] nil))
+poke k ev = [(answer (6@ev) (7@ev)) [(2@k) (3@k)]]
+kernel := [[poke [peek load]] 0]
+"""
+
 
 def kernel(src):
     return skijack.compile(src, check=False).terms["kernel"]
@@ -141,3 +148,11 @@ def test_entropy_comes_from_the_world_and_only_with_it():
     assert (r.stdout, len(r.passed), r.pokes) == (b"", 1, 1)
     with pytest.raises(DriverError):
         run_kernel(kernel(BITS), World(entropy=bytes(16)))
+
+
+def test_the_step_count_is_the_pokes_contractions_when_the_walk_reaches_it():
+    """One poke, boot's, before the request is taken: the count is its
+    contractions, and the run exits with it."""
+    r = run_kernel(kernel(STEPS), World())
+    # boot's poke takes 52 contractions and the reply's 89
+    assert (r.status, r.steps, r.pokes) == (52, 141, 2)
