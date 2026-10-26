@@ -200,8 +200,14 @@ SKIlark today or a Jock or a Hoon front end later, emits the same cards.
 | 1 | `[1 [fd bytes]]`: write to standard output (1) or error (2) | none |
 | 2 | `[2 [id [fd max]]]`: read at most `max` bytes of standard input (0) | `[0 [id bytes]]`, `nil` at its end |
 | 3 | `[3 [id name]]`: an environment variable | `[0 [id v]]`: `nil` unset, `cons value nil` set |
-| 4 | `[4 id]`: the run's CPU milliseconds, never decreasing across restarts | `[0 [id ms]]` |
+| 4 | `[4 id]`: the run's CPU milliseconds, a numeral, never decreasing across restarts | `[0 [id ms]]` |
 | 5 | `[5 code]`: exit with status `code`, after the cards before it | none |
+
+**Only a program run as a kernel has drivers.** Most SKIjack programs
+are plain terms, reduced to a value and printed, and they stay so. A
+kernel is a cell `[battery state]` that no shape tells from another
+value, so a runtime asks to be told: Avon's `avon run --kernel`, beside
+`avon run` for a plain program.
 
 **A run starts with its arguments.** The first event is
 `[0 [0 [argv bits]]]`, `argv` the arguments as byte strings with the
