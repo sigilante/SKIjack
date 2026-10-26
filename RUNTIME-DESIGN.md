@@ -173,7 +173,8 @@ hash-consed image format and the bitstring for interchange only.
 
 ## 3e. Drivers: effects every front end shares
 
-*Proposed 2026-10-26, not decided. Avon's side, with the open decisions, is
+*Proposed and decided 2026-10-26, the clock's restart rule under review.
+Avon's side, with the decisions and their reasons, is
 `avon/docs/DESIGN.md` §9.2; SKIlark's first use is its `PLAN.md` stage 15.
 Nothing here is built.*
 
@@ -199,7 +200,7 @@ SKIlark today or a Jock or a Hoon front end later, emits the same cards.
 | 1 | `[1 [fd bytes]]`: write to standard output (1) or error (2) | none |
 | 2 | `[2 [id [fd max]]]`: read at most `max` bytes of standard input (0) | `[0 [id bytes]]`, `nil` at its end |
 | 3 | `[3 [id name]]`: an environment variable | `[0 [id v]]`: `nil` unset, `cons value nil` set |
-| 4 | `[4 id]`: CPU milliseconds since the run began | `[0 [id ms]]` |
+| 4 | `[4 id]`: the run's CPU milliseconds, never decreasing across restarts | `[0 [id ms]]` |
 | 5 | `[5 code]`: exit with status `code`, after the cards before it | none |
 
 **A run starts with its arguments.** The first event is
@@ -218,8 +219,8 @@ nothing twice.
 that pokes `kernel-events` becomes a small host in Python. That host
 answers from a fixed world, of input bytes, arguments, an environment and
 a clock, and it is the oracle that Avon's drivers are checked against, as
-it is for kernels now. Once decided, the shapes move into `SPEC.md` §4.1
-beside entropy's. Until then they bind nothing.
+it is for kernels now. The shapes move into `SPEC.md` §4.1 beside entropy's
+with the first runtime that performs them. Until then they bind nothing.
 
 **What stays with the program.** Printing a value and parsing input are the
 front end's work, in SKI: a driver moves bytes and never learns a syntax.
