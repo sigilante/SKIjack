@@ -1,20 +1,24 @@
 """The full language's front end (front1.ascii.ski), checked in Avon.
 
     python3 -m skijack.selfhost.run1 --avon PATH [--corpus [--expect M]] [--edges]
-                                     [--random N] [--random1 N] [--seed N] [--no-fixed-point]
+                                     [--random N] [--random1 N] [--random6 N] [--seed N] [--no-fixed-point]
                                      [--templates [--data] [--fix]]
 
 front1 is the self-hosted front end for the whole of SKIjack, built in
 milestones (avon docs/WORKLIST.md, Stage 8): M1 cores, macros,
 signatures and the Tier 1 birds; M2 interpreter generation; M3
 quotation; M4 scries and namespace literals; then numeral literals; M5
-Stage A.  Its reference is Stage A (`skijack.check`) over the parsed
-program, then the expander with checking off, `skijack.compile(text,
-check=False)`: checking only refuses, and never changes a term
-(DESIDERATA.md item 11), so the terms of every program both accept are
-what front1 must give, hash for hash.  A refusal carries its class
-(CLASSES): Stage A's first problem's, or 0 where the parser or the
-expander refuses.  A term holding a name the expander left unresolved, a
+Stage A; M6 Stage B.  Its reference is the expander's own order: Stage A
+(`skijack.check`) over the parsed program, generation, Stage B
+(`skijack.typecheck`) over the generated program, then the expander with
+checking off, `skijack.compile(text, check=False)`: checking only
+refuses, and never changes a term (DESIDERATA.md item 11), so the terms of
+every program the checks accept are what front1 must give, hash for hash.
+A refusal carries its class (CLASSES): Stage A's first problem's, 7 for
+Stage B's, or 0 where the parser or the expander refuses.  front1 must
+agree only where both can witness: a refusal Python gives because Stage B
+outran its recursion limit is not compared (UNWITNESSED), and front1 may
+accept that program.  A term holding a name the expander left unresolved, a
 free atom, counts as a refusal: Stage B refuses it ("unresolved name").
 
 The comparison is as a map, a name to its term's §5 hash: Python's
@@ -28,6 +32,8 @@ as the later assignment does in expand.py.
 - `--edges`: run0's edge programs and each milestone's, against the full
   reference.
 - `--random N`: run0's random SKIjack-0 programs.
+- `--random6 N`: random programs typed as they are written, which Stage B
+  accepts but for one ill-typed subterm in about one in seven.
 - `--random1 N`: random programs of the full language: macros, cores,
   birds, object types and their interpreter cores, datums and level-1
   runs.
@@ -52,12 +58,13 @@ from aviary_kernel.terms import Atom
 
 import skijack
 from skijack import parse
-from skijack.check import check_program
+from skijack.check import check_program, isa_binders
 from skijack.dictionary import structural_hash
-from skijack.expand import program_prelude
+from skijack.expand import _generate, program_prelude
 from skijack.errors import SkijackError
 from skijack.export import jam
 from skijack.templates import templates, write as write_templates, write_words
+from skijack.typecheck import _UNSETTLED, typecheck_program
 
 from .run0 import Deep, EDGES, TERMS, _H
 
@@ -553,9 +560,158 @@ def _program2(rng: random.Random) -> str:
     return "\n".join(lines) + "\n"
 
 
+#: Stage B's accepting paths: programs typed as they are written
+_NAT, _BOOL = "nat", "bool"
+
+
+def _cell(a, b):
+    return ("cell", a, b)
+
+
+def _fn(a, b):
+    return ("fn", a, b)
+
+
+def _simple(rng):
+    return rng.choice([_NAT, _BOOL, _NAT])
+
+
+def _ty(rng, depth=0):
+    r = rng.random()
+    if depth < 1 and r < 0.15:
+        return _cell(_simple(rng), _simple(rng))
+    if depth < 1 and r < 0.25:
+        return _fn(_simple(rng), _simple(rng))
+    return _simple(rng)
+
+
+def _sig(t):
+    if t == _NAT or t == _BOOL:
+        return t
+    return None
+
+
+class _Typed:
+    def __init__(self, rng):
+        self.rng = rng
+        self.funs = []          # (name, [param types], result type, poly)
+        self.n = 0
+
+    def fresh(self, base):
+        self.n += 1
+        return f"{base}{self.n}"
+
+    def expr(self, t, env, depth, rec=None):
+        """An expression of type t over env [(name, type)]."""
+        rng = self.rng
+        if isinstance(t, tuple) and t[0] == "fn":
+            x = self.fresh("x")
+            return f"(\\{x}. {self.expr(t[2], env + [(x, t[1])], depth + 1, rec)})"
+        if isinstance(t, tuple) and t[0] == "cell":
+            return f"[{self.expr(t[1], env, depth + 1, rec)} {self.expr(t[2], env, depth + 1, rec)}]"
+        opts = ["leaf"]
+        if depth < 3:
+            opts += ["case", "call", "case", "pick", "apply"]
+            if t == _NAT:
+                opts += ["suc", "add", "lit"]
+            if t == _BOOL:
+                opts += ["ifeq"]
+        vars_t = [x for x, xt in env if xt == t]
+        if vars_t:
+            opts += ["var", "var"]
+        k = rng.choice(opts)
+        if k == "var":
+            return rng.choice(vars_t)
+        if k == "leaf" or (k == "call" and not self.funs and rec is None):
+            if t == _NAT:
+                return rng.choice(["Zero", "(Suc Zero)", str(rng.randrange(4))])
+            return rng.choice(["Yes", "No"])
+        if k == "suc":
+            return f"(Suc {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "lit":
+            return str(rng.randrange(6))
+        if k == "add":
+            return f"(natAdd {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "ifeq":
+            return (f"(natIfEq {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)} "
+                    f"{self.expr(_BOOL, env, depth + 1, rec)} {self.expr(_BOOL, env, depth + 1, rec)})")
+        if k == "pick":
+            other = _simple(rng)
+            if rng.random() < 0.5:
+                return f"(2@[{self.expr(t, env, depth + 1, rec)} {self.expr(other, env, depth + 1, rec)}])"
+            return f"(3@[{self.expr(other, env, depth + 1, rec)} {self.expr(t, env, depth + 1, rec)}])"
+        if k == "apply":
+            a = _simple(rng)
+            x = self.fresh("y")
+            return f"((\\{x}. {self.expr(t, env + [(x, a)], depth + 1, rec)}) {self.expr(a, env, depth + 1, rec)})"
+        if k == "case":
+            if rng.random() < 0.6:
+                s = self.expr(_NAT, env, depth + 1, rec)
+                j = self.fresh("j")
+                inner = env + [(j, _NAT)]
+                # recursion on the predecessor, under the case
+                return f"({s} |> {{ Zero {self.expr(t, env, depth + 1, rec)} ; Suc {j} {self.expr(t, inner, depth + 1, rec)} }})"
+            s = self.expr(_BOOL, env, depth + 1, rec)
+            return f"({s} |> {{ Yes {self.expr(t, env, depth + 1, rec)} ; No {self.expr(t, env, depth + 1, rec)} }})"
+        # a call: an earlier equation, a polymorphic one, or the recursion
+        cands = [f for f in self.funs if f[3] or f[2] == t]
+        if rec is not None and rec[2] == t and rng.random() < 0.3:
+            cands = [rec]
+        if not cands:
+            return self.expr(t, env, 3, rec)
+        name, ps, res, poly = rng.choice(cands)
+        if poly:
+            # id-like: a -> a, used at t
+            return f"({name} {self.expr(t, env, depth + 1, rec)})"
+        args = " ".join(self.expr(p, env, depth + 1, rec) for p in ps)
+        return f"({name} {args})" if args else name
+
+    def program(self, bad=False):
+        rng = self.rng
+        lines = [_H]
+        if rng.random() < 0.5:
+            lines.append("ident x = x\n")
+            self.funs.append(("ident", ["a"], "a", True))
+        for i in range(rng.randrange(2, 5)):
+            name = self.fresh("f")
+            ps = [_ty(rng) for _ in range(rng.randrange(0, 3))]
+            res = _simple(rng)
+            bs = [self.fresh("b") for _ in ps]
+            me = (name, ps, res, False)
+            body = self.expr(res, list(zip(bs, ps)), 0, me)
+            if rng.random() < 0.3 and all(_sig(p) for p in ps):
+                lines.append(f"{name} : {' -> '.join([_sig(p) for p in ps] + [res])}\n")
+            lines.append(f"{name} {' '.join(bs)} = {body}\n".replace("  =", " ="))
+            self.funs.append(me)
+        if rng.random() < 0.4:
+            c, a, b2 = self.fresh("c"), self.fresh("a"), self.fresh("e")
+            p, x = self.fresh("p"), self.fresh("x")
+            lines.append(f"{c} {p} := {{\n  {a} {x} = {self.expr(_NAT, [(p, _NAT), (x, _NAT)], 1)}\n"
+                         f"  {b2} {x} = {a} (Suc {x})\n}}\n")
+        if rng.random() < 0.3:
+            f, g, n = self.fresh("m"), self.fresh("m"), self.fresh("n")
+            lines.append(f"{f} {n} = {n} |> {{ Zero Yes ; Suc k ({g} k) }}\n")
+            lines.append(f"{g} {n} = {n} |> {{ Zero No ; Suc k ({f} k) }}\n")
+        text = "".join(lines)
+        if bad:
+            # one ill-typed subterm: a truth value where a numeral goes
+            text = text.replace("(Suc Zero)", "(Suc Yes)", 1) if "(Suc Zero)" in text else text + "zz := Suc Yes\n"
+        return text
+
+
+def _program6(rng: random.Random) -> str:
+    """A random program Stage B accepts but for one ill-typed subterm in
+    about one in seven: equations typed before they are written, over
+    `nat`, `bool`, cells and functions, with polymorphic and mutual
+    recursion, cases, lambdas, picks, literals, signatures and cores."""
+    return _Typed(rng).program(bad=rng.random() < 0.15)
+
+
 #: M5's edges: each of Stage A's checks (check.py), passed and failed, and
 #: the order of the first problem among them; each with the class the
-#: reference gives it, None where it accepts
+#: reference gives it, None where it accepts.  Four Stage A passes are
+#: Stage B's to refuse: a name unresolved in a macro body, and programs
+#: whose types do not meet
 STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     # (f) scope: names resolve, or not
     "an unresolved name": ("ScopeError", _H + "f := y\n"),
@@ -564,18 +720,18 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a branch's binder": (None, _H + "f n = n |> { Zero Zero ; Suc k k }\n"),
     "a type's name as a value": ("ScopeError", _H + "f := nat\n"),
     "a macro's name": (None, _H + "m x :=* x\nf := m Zero\n"),
-    "the prelude's names": (None, _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
+    "the prelude's names": ("TypeMismatchError", _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
     # the prelude's later names are known to Stage A; front1 does not yet
     # install them (WORKLIST), so a case error after them tells the two apart
     "natDiv and listLength known": ("CaseError", _H + "f := natDiv (natRem Zero Zero) (listLength nil)\ng n = n |> { Zero Zero }\n"),
     "a core's sibling and parameter": (None, _H + "c p := {\n  a x = b p\n  b y = y\n}\n"),
     "a core's sibling outside it": ("ScopeError", _H + "c := {\n  a x = x\n}\nf := a\n"),
     "generated names known": (None, _T + _M + _C + "f := sp\ng := resK\nh := stepI\n"),
-    "a core's generated step known": (None, _T + _M + "c := {\n  stepK args = loop\n}\n"),
+    "a core's generated step known": ("TypeMismatchError", _T + _M + "c := {\n  stepK args = loop\n}\n"),
     "loop1 unknown when loop is written": ("ScopeError", _T + _M + "c := {\n  loop f t = loop1\n}\n"),
     "a name unresolved in a macro body": (None, _H + "m x :=* y\nf := Zero\n"),
     "a qualified name": ("ScopeError", _H + "f := a.b\n"),
-    "a qualified name in a macro body": ("refused", _H + "m x :=* a.b\nf := m Zero\n"),
+    "a qualified name in a macro body": ("TypeMismatchError", _H + "m x :=* a.b\nf := m Zero\n"),
     "a qualified name quoted": ("SymbolTableError", _Q + "d := <a.b>\n"),
     # declared twice
     "an equation twice": ("ScopeError", _H + "f x = x\nf y = y\n"),
@@ -654,7 +810,7 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a step short of a leaf": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK\n}\n"),
     "a step out of order": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepK stepS stepI\n}\n"),
     "a step with its own leaf step": (None, _T + _M + "c := {\n  step m = sp m nil stepS stepK (stepI)\n}\n"),
-    "a step not the walker": (None, _T + _M + "c := {\n  step m = m\n}\n"),
+    "a step not the walker": ("TypeMismatchError", _T + _M + "c := {\n  step m = m\n}\n"),
     "a loop of one binder": ("InterfaceError", _T + _M + "c := {\n  loop f = f\n}\n"),
     "loop1 without loop": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK stepI\n  loop1 l t f = t\n}\n"),
     "a loop1 of two binders": ("InterfaceError", _T + _M + "c := {\n  loop f t = t\n  loop1 l t = t\n}\n"),
@@ -670,11 +826,80 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
 
 EDGES5: Dict[str, str] = {k: v[1] for k, v in STAGEA.items()}
 
+_TM = "TypeMismatchError"
+#: M6's edges: Stage B's rules (typecheck.py), held and broken, each with
+#: the class the reference gives it, None where it accepts
+STAGEB: Dict[str, Tuple[Optional[str], str]] = {
+    # application, datums and functions
+    "a constructor applied to its field": (None, _H + "f := Suc Zero\n"),
+    "a constructor applied to a function": (_TM, _H + "f := Suc K\n"),
+    "a datum applied to its continuations": (None, _H + "f n = n Zero (\\k. k)\n"),
+    "a datum short of its continuations, used as one": (_TM, _H + "f := Suc (Zero K)\n"),
+    "a function where a datum is expected": (_TM, _H + "f n = n |> { Zero Zero ; Suc k k }\ng := f (\\x. x)\n"),
+    "polymorphism by generalization": (None, _H + "id x = x\nf := pair (id Zero) (id Yes)\n"),
+    "a monomorphic recursion": (_TM, _H + "f x = pair (f Zero) (f Yes)\n"),
+    "a mutual recursion": (None, _H + "f n = n |> { Zero Zero ; Suc k (g k) }\ng n = n |> { Zero Zero ; Suc k (f k) }\n"),
+    "self-application, equirecursive": (None, _H + "w x = x x\n"),
+    "omega": (None, _H + "o := S I I (S I I)\n"),
+    # cases
+    "a case's scrutinee of another type": (_TM, _H + "f := Yes |> { Zero Zero ; Suc k k }\n"),
+    "a case's branches disagreeing": (_TM, _H + "f n = n |> { Zero Zero ; Suc k Yes }\n"),
+    "a case's binder of its field's type": (_TM, _H + "f n = n |> { Zero Yes ; Suc k k }\n"),
+    # EQ, data
+    "EQ of data": (None, _H + "EQ x y = x\nf := EQ Zero Yes\n"),
+    "EQ of a function through a binder": (_TM, _H + "EQ x y = x\nf x = EQ x Yes\ng := f K\n"),
+    "EQ through an alias": (_TM, _H + "EQ x y = x\neq = EQ\nf := eq K Zero\n"),
+    "EQ of a cell of a function": (_TM, _H + "EQ x y = x\nf := EQ [Zero K] [Zero Zero]\n"),
+    # numerals and lists
+    "natAdd of numerals": (None, _H + "f := natAdd Zero (Suc Zero)\n"),
+    "natAdd of a truth value": (_TM, _H + "f := natAdd Yes Zero\n"),
+    "natIfEq's outcomes of one type": (_TM, _H + "f := natIfEq Zero Zero Yes Zero\n"),
+    "listLength of a numeral": (_TM, _H + "f := listLength Zero\n"),
+    # a list operation Stage B accepts waits for front1 to install the list
+    # operations, as it does the numeral operations (WORKLIST, M6)
+    "listAt of the wrong element": (_TM, _H + "f := listAt (cons Zero nil) Zero Yes\n"),
+    # literals
+    "a literal of the one numeral type": (None, _H + "f := Suc 3\n"),
+    "a literal defaulted": (None, _H + "f := 3\n"),
+    "a literal with no numeral type": (None, "bool === Yes | No\nf := 3\n"),
+    "a literal where a truth value is expected": (_TM, _H + "f n = n |> { Zero 2 ; Suc k Yes }\n"),
+    "a literal between two numeral types": (_TM, _H + "num === NZ | NS num\nf := 3\n"),
+    "a literal two numeral types fix": (None, _H + "num === NZ | NS num\nf := NS 3\n"),
+    # cells and picks
+    "a cell picked": (None, _H + "f := 2@[Zero Yes]\n"),
+    "a pick of the wrong type": (_TM, _H + "f := Suc (3@[Zero Yes])\n"),
+    # signatures
+    "a signature that holds": (None, _H + "f : nat -> nat\nf x = Suc x\n"),
+    "a signature that does not": (_TM, _H + "f : nat -> bool\nf x = Suc x\n"),
+    "a signature of an undeclared type": (_TM, _H + "f : nat -> thing\nf x = x\n"),
+    "a signature of no definition": (None, _H + "f : nat -> nat\ng := Zero\n"),
+    "a signature of fuel": (None, _H + "f : fuel -> fuel\nf x = suc x\n"),
+    # declarations
+    "a constructor of an undeclared field type": (_TM, _H + "t === A thing\n"),
+    "a core's equations, its parameter typed": (None, _H + "c p := {\n  a x = pair p x\n  b y = a y\n}\n"),
+    "a core's equations disagreeing": (_TM, _H + "c := {\n  a x = Suc x\n  b y = a Yes\n}\n"),
+    "a name unresolved in a macro body": (_TM, _H + "m x :=* y\nf := m Zero\n"),
+    # quotation and runs
+    "a datum": (None, _Q + "d := <K I>\n"),
+    "a level-1 run": (None, _Q + "r := whnfF |- <K I>@2\n"),
+    # runs are typed after every level-0 group, so a level-0 name of one is
+    # unresolved then
+    "a run's result used as a term": (_TM, _Q + "r := whnfF |- <K I>@2\nf := App r r\n"),
+    "a run's result as a value of its type": (_TM, _Q + "r := whnfF |- <K I>@2\nf := r |> { Nothing r ; Just t (Just t) }\n"),
+}
+
+EDGES6: Dict[str, str] = {k: v[1] for k, v in STAGEB.items()}
+
 
 #: a refusal's class, as front1 numbers it (its `result` type): 0 where the
 #: parser or the expander refuses, else Stage A's first problem's
 CLASSES = ("refused", "ScopeError", "ArityError", "CaseError", "DataError",
-           "InterfaceError", "SymbolTableError")
+           "InterfaceError", "SymbolTableError", "TypeMismatchError")
+
+#: what the reference cannot witness: Stage B refusing for the host's
+#: recursion limit, or the reference failing outside its rules.  front1
+#: must agree only where both witness, and may accept such a program
+UNWITNESSED = -1
 
 #: a name to its term's hash, or a refusal's class
 Result = Union[Dict[str, str], int]
@@ -727,19 +952,40 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
 
 
 def reference(text: str) -> Result:
-    """Stage A's first problem's class over the parsed program, as the
-    expander checks before it expands; else the expander's terms with
-    checking off, hashed, or 0 if it refuses.  Every refusal is a
-    SkijackError, the host's included (an alias of itself), and a binder
-    named S, K or I is refused by name."""
+    """As the expander checks before it expands: Stage A's first problem's
+    class over the parsed program; then a binder named S, K or I and
+    generation, 0 if they refuse; then Stage B over the generated program,
+    TypeMismatchError for any problem, or UNWITNESSED where it could not
+    settle a type within the host's recursion limit; else the expander's
+    terms with checking off, hashed, or 0 if it refuses.  Every refusal is
+    a SkijackError, the host's included (an alias of itself)."""
     try:
         with Deep():
             program = parse(text, "ascii")
-            problems = check_program(program, program_prelude(program))
+            prelude = program_prelude(program)
+            problems = check_program(program, prelude)
     except SkijackError:
         return 0
     if problems:
         return CLASSES.index(problems[0].kind.__name__)
+    try:
+        with Deep():
+            if isa_binders(program):
+                return 0
+            generated = _generate(program)
+    except SkijackError:
+        return 0
+    try:
+        with Deep():
+            typed = typecheck_program(generated, prelude, generated=True)
+    except SkijackError:
+        return 0                    # a macro's expansion, inside Stage B
+    except Exception:               # RecursionError, or a failure outside the rules
+        return UNWITNESSED
+    if any(p.message == _UNSETTLED for p in typed):
+        return UNWITNESSED
+    if typed:
+        return CLASSES.index("TypeMismatchError")
     try:
         with Deep():
             e = skijack.compile(text, lexicon="ascii", check=False)
@@ -764,7 +1010,10 @@ def _closed(t) -> bool:
 
 
 def compare(got: Result, ref: Result) -> str:
-    """'' if front1 did what the reference did, else what differs."""
+    """'' if front1 did what the reference did, else what differs; ''
+    where the reference cannot witness."""
+    if ref == UNWITNESSED:
+        return ""
     if isinstance(got, int) or isinstance(ref, int):
         if got == ref:
             return ""
@@ -786,6 +1035,7 @@ def main(argv=None) -> int:
     ap.add_argument("--edges", action="store_true")
     ap.add_argument("--random", type=int, default=0)
     ap.add_argument("--random1", type=int, default=0, help="random programs of the full language")
+    ap.add_argument("--random6", type=int, default=0, help="random programs typed as they are written")
     ap.add_argument("--seed", type=int, default=20260928)
     ap.add_argument("--no-fixed-point", action="store_true")
     ap.add_argument("--templates", action="store_true")
@@ -818,7 +1068,7 @@ def main(argv=None) -> int:
                 fail += 1
     if a.edges:
         bad = 0
-        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB, **EDGES5}
+        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB, **EDGES5, **EDGES6}
         for what, text in edges.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why:
@@ -854,10 +1104,25 @@ def main(argv=None) -> int:
         print(f"random1: {a.random1 - bad} of {a.random1} agree "
               f"({accepted} accepted by the expander)")
         fail += bad
+    if a.random6:
+        rng, bad, accepted = random.Random(a.seed), 0, 0
+        for i in range(a.random6):
+            text = _program6(rng)
+            ref = reference(text)
+            why = compare(run_avon(a.avon, text, extra)[1], ref)
+            accepted += not isinstance(ref, int)
+            if why:
+                print(f"FAIL random6 program {i}: {why}\n{text}")
+                bad += 1
+        print(f"random6: {a.random6 - bad} of {a.random6} agree ({accepted} accepted)")
+        fail += bad
     if not a.no_fixed_point:
         t0 = time.time()
         text = FRONT.read_text()
-        steps, got = run_avon(a.avon, text, extra)
+        # the same terms in every mode; without templates Stage B's run
+        # would take more than 12 GB, so the fixed point always has them
+        fp = extra if a.templates else (f"--templates={term_dir()}", "--data")
+        steps, got = run_avon(a.avon, text, fp)
         why = compare(got, reference(text))
         if isinstance(got, int) and not why:
             why = "front1 and the reference both refuse front1's own source"

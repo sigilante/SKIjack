@@ -196,14 +196,17 @@ toward the full language, milestone by milestone (avon
 - Lit: numeral literals;
 - M5: Stage A (`check.py`), over the parsed program before macros and
   generation, each refusal with its class: Stage A's first problem's, or
-  0 where the parser or the expander refuses.
+  0 where the parser or the expander refuses;
+- M6: Stage B (`typecheck.py`), over the generated program with its
+  bodies macro-expanded, its types nodes in a store keyed by number; any
+  problem is class 7.
 
 Every one of the eighteen corpus programs the expander compiles compiles
 through it to the expander's terms, and it refuses the four the expander
-refuses, each with Stage A's class. It is still a SKIjack-0 program;
-Stage B, M6, is to come. It does not yet install `natDiv`, `natRem` or
-the list operations, which the expander's prelude gained after M4.
-`run1.py` checks it against Stage A and then the expander with checking
-off, on the corpus, edge programs, random programs and its own source;
+refuses, each with Stage A's class. It is still a SKIjack-0 program. It
+does not yet install `natDiv`, `natRem` or the list operations, which the
+expander's prelude gained after M4. `run1.py` checks it against Stage A,
+Stage B and then the expander with checking off, on the corpus, edge
+programs, random programs, typed random programs and its own source;
 `tests/test_front1.py` runs those checks when `AVON` is set, and
 `avon/tests/front1_check.sh` runs them at full size.
