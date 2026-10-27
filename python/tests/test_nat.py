@@ -124,6 +124,18 @@ def test_a_program_defining_its_own_operation_keeps_it(tmp_path):
     assert not (tmp_path / "words.tsv").exists()
 
 
+def test_a_core_named_as_a_needed_operation_denotes_its_loop():
+    """natMul installs natAdd for its own use, not as a name of the
+    program's, so a core the program calls natAdd still denotes its fuel
+    loop wherever the program names it."""
+    core = "natAdd := {\n  loop x = Suc x\n}\ng = natAdd Zero\n"
+    exp = _compile(core + "m = natMul\n")
+    ref = _compile(core)
+    assert exp.terms["natAdd"] == exp.terms["natAdd.loop"] == ref.terms["natAdd"]
+    assert exp.terms["g"] == ref.terms["g"]
+    assert exp.terms["natMul"] == _compile("m = natMul\n").terms["natMul"]
+
+
 def test_a_program_s_own_suc_and_zero_do_not_reach_the_operations():
     """A program that defines `suc` or `zero` replaces the prelude's for
     its own uses of the names; the operations count with the prelude's

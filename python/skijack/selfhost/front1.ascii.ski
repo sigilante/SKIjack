@@ -893,10 +893,11 @@ loopP ls = ls |> { RnNil PrNil ; RnCons n c r (PrCons n c (loopP r)) }
 -- the prelude's successor as a term: the numeral operations and fuel
 -- use it, not the name `suc`, which a program may define for itself
 sucR := rapp (rapp RS (rapp RK RK)) (rapp (rapp RS (rapp RK (rapp RS RI))) RK)
--- the numeral operations a program names and does not define, each `Y`
--- of a generator taking itself first; expand.py's helper rules are
--- inline here, and natMul's natAdd is always the prelude's
-natNames := NmCons idNatAdd (NmCons idNatSub (NmCons idNatMul (NmCons idNatIfEq (NmCons idNatIfLe NmNil))))
+-- the numeral and list operations a program names and does not define,
+-- each `Y` of a generator taking itself first; expand.py's helper rules
+-- are inline here, and the operations one uses (natMul's natAdd, natDiv's
+-- and natRem's natSub and natIfLe) are always the prelude's
+natNames := NmCons idNatAdd (NmCons idNatSub (NmCons idNatMul (NmCons idNatIfEq (NmCons idNatIfLe (NmCons idNatDiv (NmCons idNatRem (NmCons idListLength (NmCons idListAt (NmCons idListAppend (NmCons idListTake (NmCons idListDrop NmNil)))))))))))
 natOps ds = natOps2 ds natNames
 natOps2 ds ns = ns |> { NmNil NmNil ; NmCons n r (andB (menD n ds) (notB (defD n ds)) |> { Yes (NmCons n (natOps2 ds r)) ; No (natOps2 ds r) }) }
 menD n ds = ds |> { DNil No ; DCons d r (orB (d |> { DEq m bs x (hasE n x) ; DDef m x (hasE n x) ; DType m cs fs No ; DMacro m ps c x (hasE n x) ; DCore m ps es (menD n es) ; DCEq c m rn bs x (hasE n x) }) (menD n r)) }
@@ -907,6 +908,7 @@ hasFt n fs = fs |> { FtNil No ; FtCons p x r (orB (hasP n p) (orB (hasE n x) (ha
 hasX n xs = xs |> { XNil No ; XCons x r (orB (hasE n x) (hasX n r)) }
 hasBs n bs = bs |> { BNil No ; BCons b r (b |> { Br c ns x (orB (hasE n x) (hasBs n r)) }) }
 five := Suc four
+rap3 f a b c = rapp (rapp (rapp f a) b) c
 rap4 f a b c d = rapp (rapp (rapp (rapp f a) b) c) d
 natAddR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp sucR (rapp (rapp (RIx Zero) (RIx one)) (RIx two))))) (RIx Zero)) (RIx one)))))
 natSubR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp (RIx Zero) (rapp (rapp (RIx one) RK) RI)) (RIx two)))) (RIx Zero)) (RIx one)))))
@@ -915,7 +917,16 @@ natIfT := RRule (Rule (dum five) (rapp (rapp (rapp (rapp (RIx Zero) (RIx three))
 natIfS := RRule (Rule (dum five) (rapp (rapp (RIx one) (RIx three)) (rap4 natIfT (RIx Zero) (RIx two) (RIx three) (RIx four))))
 natIfEqR := rapp yComb (RRule (Rule (dum five) (rapp (rapp (RIx one) (rapp (rapp (RIx two) (RIx three)) (rapp RK (RIx four)))) (rap4 natIfS (RIx Zero) (RIx two) (RIx three) (RIx four)))))
 natIfLeR := rapp yComb (RRule (Rule (dum five) (rapp (rapp (RIx one) (RIx three)) (rap4 natIfS (RIx Zero) (RIx two) (RIx three) (RIx four)))))
-natR n = eqId n idNatAdd |> { Yes natAddR ; No (eqId n idNatSub |> { Yes natSubR ; No (eqId n idNatMul |> { Yes natMulR ; No (eqId n idNatIfEq |> { Yes natIfEqR ; No natIfLeR }) }) }) }
+natDivR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) RK) (rap3 (RRule (Rule (dum four) (rap4 natIfLeR (RIx two) (RIx one) (rapp sucR (rapp (rapp (RIx Zero) (rapp (rapp natSubR (RIx one)) (RIx two))) (RIx two))) RK))) (RIx Zero) (RIx one) (RIx two)))))
+natRemR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rap3 (RRule (Rule (dum four) (rap4 natIfLeR (RIx two) (RIx one) (rapp (rapp (RIx Zero) (rapp (rapp natSubR (RIx one)) (RIx two))) (RIx two)) (RIx one)))) (RIx Zero) (RIx one) (RIx two)))))
+-- the list operations build with the prelude's nil, which is K, and cons
+consR := rapp (rapp RS (rapp RK (rapp RS (rapp RK RK)))) (rapp (rapp RS (rapp (rapp RS (rapp RK RS)) (rapp (rapp RS (rapp RK RK)) (rapp (rapp RS (rapp RK RS)) (rapp (rapp RS (rapp RK (rapp RS RI))) RK))))) (rapp RK RK))
+listLengthR := rapp yComb (RRule (Rule (dum two) (rapp (rapp (RIx one) RK) (rapp (RRule (Rule (dum three) (rapp sucR (rapp (RIx Zero) (RIx two))))) (RIx Zero)))))
+listAtR := rapp yComb (RRule (Rule (dum four) (rapp (rapp (RIx one) (RIx three)) (rap3 (RRule (Rule (dum five) (rapp (rapp (RIx one) (RIx three)) (rap3 (RRule (Rule (dum four) (rap3 (RIx Zero) (RIx one) (RIx three) (RIx two)))) (RIx Zero) (RIx four) (RIx two))))) (RIx Zero) (RIx two) (RIx three)))))
+listAppendR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx one) (RIx two)) (rapp (rapp (RRule (Rule (dum four) (rapp (rapp consR (RIx two)) (rapp (rapp (RIx Zero) (RIx three)) (RIx one))))) (RIx Zero)) (RIx two)))))
+listTakeR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) RK) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp (RIx one) RK) (rapp (rapp (RRule (Rule (dum four) (rapp (rapp consR (RIx two)) (rapp (rapp (RIx Zero) (RIx three)) (RIx one))))) (RIx Zero)) (RIx two))))) (RIx Zero)) (RIx one)))))
+listDropR := rapp yComb (RRule (Rule (dum three) (rapp (rapp (RIx two) (RIx one)) (rapp (rapp (RRule (Rule (dum three) (rapp (rapp (RIx one) RK) (rapp (rapp (RRule (Rule (dum four) (rapp (rapp (RIx Zero) (RIx three)) (RIx one)))) (RIx Zero)) (RIx two))))) (RIx Zero)) (RIx one)))))
+natR n = eqId n idNatAdd |> { Yes natAddR ; No (eqId n idNatSub |> { Yes natSubR ; No (eqId n idNatMul |> { Yes natMulR ; No (eqId n idNatIfEq |> { Yes natIfEqR ; No (eqId n idNatIfLe |> { Yes natIfLeR ; No (eqId n idNatDiv |> { Yes natDivR ; No (eqId n idNatRem |> { Yes natRemR ; No (eqId n idListLength |> { Yes listLengthR ; No (eqId n idListAt |> { Yes listAtR ; No (eqId n idListAppend |> { Yes listAppendR ; No (eqId n idListTake |> { Yes listTakeR ; No listDropR }) }) }) }) }) }) }) }) }) }) }
 natRules ns rs = ns |> { NmNil rs ; NmCons n r (natRules r (rAdd n (Rule NmNil (natR n)) rs)) }
 -- quotation (expand.py, pass 6): a definition that is a quotation is a
 -- datum, or with fuel or an interpreter a level-1 run.  Its body, nested
@@ -1601,7 +1612,7 @@ front3b ms ct ys nops q sg = q |> { CQ ds st (front3s ms ct ys nops ds st sg (ob
 front3s ms ct ys nops ds st sg ss = bArgsOK ms (bLoops (BGx ds Bn Cm0 NmNil Rv0) ss ds) ds |> { No (RErr Zero) ; Yes (stageB st ms ct ds sg ss |> { BNo (RErr (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))) ; BOk (front3c ms ct ys nops ds st) }) }
 front3c ms ct ys nops ds st = (qstrip (pathSx ct st ds) (objOf ds ObNone |> { Ob on cs fs apc (memN idScry (leavesOf apc cs)) ; ObNone No ; ObErr No }) ds Bn |> { QStFail (RErr Zero) ; QSt qd qc (st |> { Ist tab rv nx (front4 rv ms ct ys ds nops qd (orderOf ds)) }) })
 front4 rv ms ct ys ds nops qd o = front4a rv ms ct ys ds nops qd (appN o (prelNotIn (setOf o Ns0) (appN preludeNames nops)))
-front4a rv ms ct ys ds nops qd env = front5 rv ms ct ys ds nops qd env (loops ds) (loopAlias (setOf (memN idNatMul nops |> { Yes (NmCons idNatAdd env) ; No env }) Ns0) (loops ds))
+front4a rv ms ct ys ds nops qd env = front5 rv ms ct ys ds nops qd env (loops ds) (loopAlias (setOf env Ns0) (loops ds))
 front5 rv ms ct ys ds nops qd env ls al = front5a rv ms ct ys ds nops qd env ls al (setOf (appN (notIn (l1Names qd) env) (appN (cidsOf ds) (rnKeys al))) Ns0) (eqsOf ct ys ds)
 front5a rv ms ct ys ds nops qd env ls al es0 eqs = front5b rv ms ct ys ds nops qd env ls al es0 (depsAll (setOf (namesX eqs) Ns0) eqs)
 front5b rv ms ct ys ds nops qd env ls al es0 dd = front5c rv ms ct ys ds nops qd env ls al es0 dd (tarjan dd (Tst Zero NmNil (tjInit dd Tj0) ScNil))
