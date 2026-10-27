@@ -7,12 +7,15 @@
 front1 is the self-hosted front end for the whole of SKIjack, built in
 milestones (avon docs/WORKLIST.md, Stage 8): M1 cores, macros,
 signatures and the Tier 1 birds; M2 interpreter generation; M3
-quotation; M4 scries and namespace literals; then numeral literals.
-Its reference is the expander with checking off, `skijack.compile(text, check=False)`:
-checking only refuses, and never changes a term (DESIDERATA.md item 11),
-so the terms of every program the expander accepts are what front1 must
-give, hash for hash.  A term holding a name the expander left unresolved,
-a free atom, counts as a refusal: Stage B refuses it ("unresolved name").
+quotation; M4 scries and namespace literals; then numeral literals; M5
+Stage A.  Its reference is Stage A (`skijack.check`) over the parsed
+program, then the expander with checking off, `skijack.compile(text,
+check=False)`: checking only refuses, and never changes a term
+(DESIDERATA.md item 11), so the terms of every program both accept are
+what front1 must give, hash for hash.  A refusal carries its class
+(CLASSES): Stage A's first problem's, or 0 where the parser or the
+expander refuses.  A term holding a name the expander left unresolved, a
+free atom, counts as a refusal: Stage B refuses it ("unresolved name").
 
 The comparison is as a map, a name to its term's §5 hash: Python's
 output order follows dict insertion, which is not normative
@@ -43,12 +46,15 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 from aviary_kernel.terms import Atom
 
 import skijack
+from skijack import parse
+from skijack.check import check_program
 from skijack.dictionary import structural_hash
+from skijack.expand import program_prelude
 from skijack.errors import SkijackError
 from skijack.export import jam
 from skijack.templates import templates, write as write_templates, write_words
@@ -547,7 +553,131 @@ def _program2(rng: random.Random) -> str:
     return "\n".join(lines) + "\n"
 
 
-Result = Optional[Dict[str, str]]
+#: M5's edges: each of Stage A's checks (check.py), passed and failed, and
+#: the order of the first problem among them; each with the class the
+#: reference gives it, None where it accepts
+STAGEA: Dict[str, Tuple[Optional[str], str]] = {
+    # (f) scope: names resolve, or not
+    "an unresolved name": ("ScopeError", _H + "f := y\n"),
+    "a bound name": (None, _H + "f x = x\n"),
+    "a lambda's binder": (None, _H + "f := \\x. x\n"),
+    "a branch's binder": (None, _H + "f n = n |> { Zero Zero ; Suc k k }\n"),
+    "a type's name as a value": ("ScopeError", _H + "f := nat\n"),
+    "a macro's name": (None, _H + "m x :=* x\nf := m Zero\n"),
+    "the prelude's names": (None, _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
+    # the prelude's later names are known to Stage A; front1 does not yet
+    # install them (WORKLIST), so a case error after them tells the two apart
+    "natDiv and listLength known": ("CaseError", _H + "f := natDiv (natRem Zero Zero) (listLength nil)\ng n = n |> { Zero Zero }\n"),
+    "a core's sibling and parameter": (None, _H + "c p := {\n  a x = b p\n  b y = y\n}\n"),
+    "a core's sibling outside it": ("ScopeError", _H + "c := {\n  a x = x\n}\nf := a\n"),
+    "generated names known": (None, _T + _M + _C + "f := sp\ng := resK\nh := stepI\n"),
+    "a core's generated step known": (None, _T + _M + "c := {\n  stepK args = loop\n}\n"),
+    "loop1 unknown when loop is written": ("ScopeError", _T + _M + "c := {\n  loop f t = loop1\n}\n"),
+    "a name unresolved in a macro body": (None, _H + "m x :=* y\nf := Zero\n"),
+    "a qualified name": ("ScopeError", _H + "f := a.b\n"),
+    "a qualified name in a macro body": ("refused", _H + "m x :=* a.b\nf := m Zero\n"),
+    "a qualified name quoted": ("SymbolTableError", _Q + "d := <a.b>\n"),
+    # declared twice
+    "an equation twice": ("ScopeError", _H + "f x = x\nf y = y\n"),
+    "a macro and an equation": ("ScopeError", _H + "f x :=* x\nf y = y\n"),
+    "a type and an equation": ("ScopeError", _H + "nat x = x\n"),
+    "a constructor and an equation": ("ScopeError", _H + "Zero x = x\n"),
+    "a core and a definition": ("ScopeError", _H + "c := {\n  a x = x\n}\nc := Zero\n"),
+    "a type twice": ("ScopeError", _H + "nat === One\n"),
+    "an equation twice in a core": ("ScopeError", _H + "c := {\n  a x = x\n  a y = y\n}\n"),
+    "a constructor twice, refused by the parser": ("refused", _H + "t === Zero\n"),
+    # binders named S, K or I
+    "a lambda binding S": ("ScopeError", _H + "f := \\S. Zero\n"),
+    "a macro binding K": ("ScopeError", _H + "m K :=* Zero\n"),
+    "a branch binding I": ("ScopeError", _H + "f n = n |> { Zero Zero ; Suc I Zero }\n"),
+    "a core binding S": ("ScopeError", _H + "c S := {\n  a x = x\n}\n"),
+    "a core binding S, with no equations": (None, _H + "c S := {\n}\n"),
+    "a quoted lambda binding K": ("ScopeError", _Q + "d := <\\K. S>\n"),
+    # (b) cases
+    "a case missing a branch": ("CaseError", _H + "f n = n |> { Zero Zero }\n"),
+    "a case with a branch twice": ("CaseError", _H + "f n = n |> { Zero Zero ; Zero Zero ; Suc k k }\n"),
+    "a case over two types": ("CaseError", _H + "f n = n |> { Zero Zero ; Yes Zero }\n"),
+    "a case of an undeclared constructor, refused by the parser": ("refused", _H + "f n = n |> { Zero Zero ; Suc k k ; Two Zero }\n"),
+    "a case whose first branch is undeclared, refused by the parser": ("refused", _H + "f n = n |> { Two Zero ; Zero Zero ; Suc k k }\n"),
+    "a case out of order": (None, _H + "f n = n |> { Suc k k ; Zero Zero }\n"),
+    "a case in a macro body": ("CaseError", _H + "m x :=* x |> { Zero Zero }\nf := Zero\n"),
+    "a case quoted, incomplete, which Stage A leaves to the expander": ("refused", _Q + "d := <Zero |> { Zero K }>\n"),
+    # (c) data and functions
+    "EQ of a lambda": ("DataError", _H + "EQ x y = x\nf := EQ (\\x. x) Zero\n"),
+    "EQ of an equation": ("DataError", _H + "EQ x y = x\ng x = x\nf := EQ Zero g\n"),
+    "EQ of an equation with no binders": (None, _H + "EQ x y = x\ng = Zero\nf := EQ Zero g\n"),
+    "EQ of a combinator": ("DataError", _H + "EQ x y = x\nf := EQ S Zero\n"),
+    "EQ of a bird": ("DataError", _H + "EQ x y = x\nf := EQ Zero (B Zero)\n"),
+    "EQ of a constructor short of its fields": ("DataError", _H + "EQ x y = x\nf := EQ Suc Zero\n"),
+    "EQ of a constructor saturated": (None, _H + "EQ x y = x\nf := EQ (Suc Zero) Zero\n"),
+    "EQ of a macro": ("DataError", _H + "EQ x y = x\nm x :=* x\nf := EQ m Zero\n"),
+    "EQ of a core": ("DataError", _H + "EQ x y = x\nc := {\n  a x = x\n}\nf := EQ c Zero\n"),
+    "EQ of a core's equation": ("DataError", _H + "EQ x y = x\nc := {\n  a x = EQ b Zero\n  b y = y\n}\n"),
+    "EQ of a bound name": (None, _H + "EQ x y = x\nf g = EQ g Zero\n"),
+    "EQ's third argument a function": (None, _H + "EQ x y z = x\nf := EQ Zero Zero (\\x. x)\n"),
+    "EQ of a namespace literal": ("DataError", _B + "f := EQ5 (ns{/nat => <I>}) Nil\n"),
+    "EQ unresolved, of a lambda": ("DataError", _H + "f := EQ (\\x. x) y\n"),
+    "a scry at level 0": ("DataError", _B + "f x = ?^/nat\n"),
+    "a namespace literal in an equation": ("DataError", _B + "f x = ns{/nat => <I>}\n"),
+    "a numeral quoted": ("DataError", _Q + "d := <3>\n"),
+    "a nested quotation with fuel": ("DataError", _Q + "d := <<K>@3>\n"),
+    "a namespace literal quoted": ("DataError", _B + "d := <ns{/nat => <I>}>\n"),
+    "a fact's value not a datum": ("DataError", _B + "r := ns{/nat => I}\n"),
+    "a fact's value with fuel": ("DataError", _B + "r := ns{/nat => <I>@3}\n"),
+    "a path segment with a payload": ("DataError", _B + "r := ns{/nat[<K>] => <I>}\n"),
+    # paths
+    "a path with no path type": ("ScopeError", _B.replace("path === Nil | Cons seg path\n", "") + "d := <?^/nat>\n"),
+    "a path segment of no constructor": ("ScopeError", _B + "d := <?^/four>\n"),
+    "a path segment of another type": ("ScopeError", _B + "d := <?^/pTrue>\n"),
+    "a path segment carrying a field": ("ArityError", _B.replace("seg === Nat | Two | Three", "seg === Nat | Two | Three | Four seg") + "d := <?^/four>\n"),
+    "a scry with no Scry leaf": ("SymbolTableError", _B.replace("term5 === S | K | I | App term5 term5 | Scry", "term5 === S | K | I | App term5 term5") + "d := <?^/nat>\n"),
+    # (a) arity, inside a quotation
+    "a constructor of another type quoted short": ("ArityError", _Q + "d := <Suc>\n"),
+    "a constructor of another type quoted saturated": (None, _Q + "d := <Suc Zero>\n"),
+    "a constructor of another type quoted over": ("ArityError", _Q + "d := <Zero K>\n"),
+    "the object type's constructor quoted bare": (None, _Q + "d := <App>\n"),
+    # (e) the two tables
+    "a quoted name of neither table": ("SymbolTableError", _Q + "d := <y>\n"),
+    "a quoted lambda's binder, of neither table": ("SymbolTableError", _Q + "d := <\\x. x>\n"),
+    "a quoted level-0 name": (None, _Q + "g x = x\nd := <g>\n"),
+    # (d) the interface
+    "two object types": ("InterfaceError", _T + "tm === A | Ap tm tm\n"),
+    "an object type with two applications": ("InterfaceError", "term === S | App term term | Ap term term\n"),
+    "an object type with a field": ("InterfaceError", "nat === Zero | Suc nat\nterm === S | V nat | App term term\n"),
+    "a path type of the wrong shape": ("InterfaceError", _H + "seg === A\npath === Nil | Cons seg path | More\n"),
+    "a path type with no nullary constructor": ("InterfaceError", _H + "seg === A\npath === Nil seg | Cons seg path\n"),
+    "an interpreter not a core": ("InterfaceError", _Q + "g x = x\nr := g |- <K>@3\n"),
+    "an interpreter applied to too few": ("InterfaceError", _Q + "c p := {\n  step m = sp m nil stepS stepK stepI\n}\nr := c |- <K>@3\n"),
+    "an interpreter not a name": ("InterfaceError", _Q + "r := (\\x. x) |- <K>@3\n"),
+    "a step for the application": ("InterfaceError", _T + _M + "c := {\n  stepApp args = args\n}\n"),
+    "a step of two binders": ("InterfaceError", _T + _M + "c := {\n  step m n = sp m nil stepS stepK stepI\n}\n"),
+    "a step short of a leaf": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK\n}\n"),
+    "a step out of order": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepK stepS stepI\n}\n"),
+    "a step with its own leaf step": (None, _T + _M + "c := {\n  step m = sp m nil stepS stepK (stepI)\n}\n"),
+    "a step not the walker": (None, _T + _M + "c := {\n  step m = m\n}\n"),
+    "a loop of one binder": ("InterfaceError", _T + _M + "c := {\n  loop f = f\n}\n"),
+    "loop1 without loop": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK stepI\n  loop1 l t f = t\n}\n"),
+    "a loop1 of two binders": ("InterfaceError", _T + _M + "c := {\n  loop f t = t\n  loop1 l t = t\n}\n"),
+    "a core's parameters before its loop's": (None, _T + _M + "c p := {\n  loop f t = t\n  loop1 l t f = t\n}\n"),
+    # the order of the first problem
+    "a duplicate before an object type's shape": ("ScopeError", "term === S | App term term | Ap term term\nf x = x\nf y = y\n"),
+    "an object type's shape before a walk's problem": ("InterfaceError", "term === S | App term term | Ap term term\nf := y\n"),
+    "a binder S before a walk's problem": ("ScopeError", _H + "f := EQ (\\x. x) Zero\ng := \\S. S\n"),
+    "EQ's argument before its head": ("DataError", _H + "f := EQ (\\x. x) y\n"),
+    "a case before a later equation's scope": ("CaseError", _H + "f n = n |> { Zero Zero }\ng := y\n"),
+    "a core's equations before its interface": ("ScopeError", _T + _M + "c := {\n  loop f = y\n}\n"),
+}
+
+EDGES5: Dict[str, str] = {k: v[1] for k, v in STAGEA.items()}
+
+
+#: a refusal's class, as front1 numbers it (its `result` type): 0 where the
+#: parser or the expander refuses, else Stage A's first problem's
+CLASSES = ("refused", "ScopeError", "ArityError", "CaseError", "DataError",
+           "InterfaceError", "SymbolTableError")
+
+#: a name to its term's hash, or a refusal's class
+Result = Union[Dict[str, str], int]
 
 
 @functools.lru_cache(maxsize=1)
@@ -572,8 +702,8 @@ def term_dir() -> pathlib.Path:
 
 
 def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Result]:
-    """front1's contraction count and its map from names to hashes (None if
-    it refused), the later of two lines for one name winning."""
+    """front1's contraction count and its map from names to hashes, or its
+    refusal's class, the later of two lines for one name winning."""
     with tempfile.NamedTemporaryFile("w", suffix=".ski", delete=False) as f:
         f.write(text)
     try:
@@ -584,8 +714,11 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
     steps = next((l.split()[1] for l in p.stderr.splitlines() if l.startswith("contractions ")), None)
     if p.returncode != 0 or steps is None:
         raise RuntimeError(f"avon front0 failed: {p.stderr.strip()[:400]}")
-    if p.stdout.strip() == "RErr":
-        return steps, None
+    words = p.stdout.split()
+    if words[:1] == ["RErr"]:
+        if len(words) != 2 or not words[1].isdigit() or int(words[1]) >= len(CLASSES):
+            raise RuntimeError(f"avon front0: a refusal with no class front1 has: {p.stdout!r}")
+        return steps, int(words[1])
     out: Dict[str, str] = {}
     for line in p.stdout.splitlines():
         name, h = line.split("\t")
@@ -594,16 +727,26 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
 
 
 def reference(text: str) -> Result:
-    """The expander's terms with checking off, hashed; None if it refuses.
-    Every refusal is a SkijackError, the host's included (an alias of
-    itself), and a binder named S, K or I is refused by name."""
+    """Stage A's first problem's class over the parsed program, as the
+    expander checks before it expands; else the expander's terms with
+    checking off, hashed, or 0 if it refuses.  Every refusal is a
+    SkijackError, the host's included (an alias of itself), and a binder
+    named S, K or I is refused by name."""
+    try:
+        with Deep():
+            program = parse(text, "ascii")
+            problems = check_program(program, program_prelude(program))
+    except SkijackError:
+        return 0
+    if problems:
+        return CLASSES.index(problems[0].kind.__name__)
     try:
         with Deep():
             e = skijack.compile(text, lexicon="ascii", check=False)
     except SkijackError:
-        return None
+        return 0
     if not all(_closed(t) for t in e.terms.values()):
-        return None
+        return 0
     return {n: structural_hash(t) for n, t in e.terms.items()}
 
 
@@ -621,11 +764,13 @@ def _closed(t) -> bool:
 
 
 def compare(got: Result, ref: Result) -> str:
-    """'' if front1 did what the expander did, else what differs."""
-    if got is None or ref is None:
-        if got is None and ref is None:
+    """'' if front1 did what the reference did, else what differs."""
+    if isinstance(got, int) or isinstance(ref, int):
+        if got == ref:
             return ""
-        return f"the expander {'refuses' if ref is None else 'accepts'}, front1 does not"
+        def what(r: Result) -> str:
+            return f"refuses ({CLASSES[r]})" if isinstance(r, int) else "accepts"
+        return f"the reference {what(ref)}, front1 {what(got)}"
     if set(got) != set(ref):
         return (f"names differ: front1 only {sorted(set(got) - set(ref))[:8]}, "
                 f"the expander only {sorted(set(ref) - set(got))[:8]}")
@@ -673,7 +818,7 @@ def main(argv=None) -> int:
                 fail += 1
     if a.edges:
         bad = 0
-        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB}
+        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB, **EDGES5}
         for what, text in edges.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why:
@@ -702,7 +847,7 @@ def main(argv=None) -> int:
                 why = compare(run_avon(a.avon, text, extra)[1], ref)
             except RuntimeError as e:
                 why = str(e)[:200]
-            accepted += ref is not None
+            accepted += not isinstance(ref, int)
             if why:
                 print(f"FAIL random1 program {i}: {why}\n{text}")
                 bad += 1
@@ -714,9 +859,9 @@ def main(argv=None) -> int:
         text = FRONT.read_text()
         steps, got = run_avon(a.avon, text, extra)
         why = compare(got, reference(text))
-        if got is None and not why:
-            why = "front1 and the expander both refuse front1's own source"
-        if why or got is None:
+        if isinstance(got, int) and not why:
+            why = "front1 and the reference both refuse front1's own source"
+        if why or isinstance(got, int):
             print(f"FAIL fixed point: {why}")
             fail += 1
         else:
