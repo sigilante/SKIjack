@@ -32,8 +32,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
-from aviary_kernel.abstraction import (bracket_abstract as _bracket_abstract,
-                                       expand as _ski_expand)
+from aviary_kernel.abstraction import bracket_abstract as _bracket_abstract
 from aviary_kernel.birds import BY_NAME
 from .abi import TIER1_NAMES
 from aviary_kernel.abstraction import ExpansionError as _HostExpansionError
@@ -47,6 +46,59 @@ from .generate import (AnswerType, ObjectType, PathType, find_answer_type,
                        generate as _generate)
 from .check import check as _check, isa_binders
 from .quote import Encoder, level1_names
+
+
+def _ski_expand(term: Term, env) -> Term:
+    """aviary's ``expand``: every combinator atom in ``term`` replaced by
+    its S/K/I term, memoized on ``env``, and the same terms.
+
+    aviary expands a combinator's body, every reference inlined, and then
+    abstracts its formals, asking at each node whether a formal is free in
+    a subtree that may hold whole inlined programs.  Here the formals are
+    abstracted over the body as written, its references still atoms, and
+    the references expanded after.  The terms are the same: a reference's
+    term is closed and holds no formal, so each abstraction rule decides
+    alike whether it sees the atom or the term.  That needs a formal never
+    spelled as a combinator, which the expander's binders never are
+    (``\\x00b:`` and the rest); a combinator with a formal so spelled is
+    expanded in aviary's order."""
+    return _ski_expand1(term, env, ())
+
+
+def _ski_expand1(term: Term, env, in_progress: Tuple[str, ...]) -> Term:
+    if isinstance(term, KApp):
+        return KApp(_ski_expand1(term.fn, env, in_progress),
+                    _ski_expand1(term.arg, env, in_progress))
+    name = term.name
+    if name in ("S", "K", "I"):
+        return term
+    if name in env.expansion_cache:
+        return env.expansion_cache[name]
+    comb = env.lookup(name)
+    if comb is None:
+        return term                  # a free variable, passed through
+    if name in in_progress:
+        raise _HostExpansionError(
+            f"cannot expand recursive combinator '{name}' to a finite S/K/I "
+            f"term; define it via a fixed-point combinator (e.g. {name} := "
+            f"Y step) instead")
+    nxt = in_progress + (name,)
+    if comb.ski is not None:
+        result = _ski_expand1(comb.ski, env, nxt)
+    elif comb.is_alias:
+        result = _ski_expand1(comb.body, env, nxt)
+    elif any(f in ("S", "K", "I") or env.lookup(f) is not None for f in comb.formals):
+        result = _ski_expand1(comb.body, env, nxt)
+        for formal in reversed(comb.formals):
+            result = _bracket_abstract(formal, result)
+    else:
+        result = comb.body
+        for formal in reversed(comb.formals):
+            result = _bracket_abstract(formal, result)
+        result = _ski_expand1(result, env, nxt)
+    env.expansion_cache[name] = result
+    return result
+
 
 __all__ = ["ExpandError", "Expansion", "expand_program", "program_prelude",
            "PRELUDE_NAMES", "NAT_NAMES", "LIST_NAMES",
