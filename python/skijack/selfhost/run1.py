@@ -613,7 +613,7 @@ class _Typed:
         if depth < 3:
             opts += ["case", "call", "case", "pick", "apply"]
             if t == _NAT:
-                opts += ["suc", "add", "lit"]
+                opts += ["suc", "add", "lit", "arith", "list"]
             if t == _BOOL:
                 opts += ["ifeq"]
         vars_t = [x for x, xt in env if xt == t]
@@ -632,6 +632,22 @@ class _Typed:
             return str(rng.randrange(6))
         if k == "add":
             return f"(natAdd {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "arith":
+            op = rng.choice(["natSub", "natMul", "natDiv", "natRem"])
+            return f"({op} {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "list":
+            # a numeral from a list of numerals, through the list operations
+            xs = "nil"
+            for _ in range(rng.randrange(3)):
+                xs = f"(cons {self.expr(_NAT, env, depth + 2, rec)} {xs})"
+            op = rng.choice(["listAppend", "listTake", "listDrop", None])
+            if op == "listAppend":
+                xs = f"(listAppend {xs} (cons {rng.randrange(4)} nil))"
+            elif op is not None:
+                xs = f"({op} {xs} {rng.randrange(3)})"
+            if rng.random() < 0.5:
+                return f"(listLength {xs})"
+            return f"(listAt {xs} {self.expr(_NAT, env, depth + 2, rec)} {self.expr(_NAT, env, depth + 2, rec)})"
         if k == "ifeq":
             return (f"(natIfEq {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)} "
                     f"{self.expr(_BOOL, env, depth + 1, rec)} {self.expr(_BOOL, env, depth + 1, rec)})")
@@ -703,7 +719,8 @@ def _program6(rng: random.Random) -> str:
     """A random program Stage B accepts but for one ill-typed subterm in
     about one in seven: equations typed before they are written, over
     `nat`, `bool`, cells and functions, with polymorphic and mutual
-    recursion, cases, lambdas, picks, literals, signatures and cores."""
+    recursion, cases, lambdas, picks, literals, the numeral and list
+    operations, signatures and cores."""
     return _Typed(rng).program(bad=rng.random() < 0.15)
 
 
@@ -721,8 +738,8 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a type's name as a value": ("ScopeError", _H + "f := nat\n"),
     "a macro's name": (None, _H + "m x :=* x\nf := m Zero\n"),
     "the prelude's names": ("TypeMismatchError", _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
-    # the prelude's later names are known to Stage A; front1 does not yet
-    # install them (WORKLIST), so a case error after them tells the two apart
+    # the prelude's later names are known to Stage A, and a case error after
+    # them shows Stage A went on past them
     "natDiv and listLength known": ("CaseError", _H + "f := natDiv (natRem Zero Zero) (listLength nil)\ng n = n |> { Zero Zero }\n"),
     "a core's sibling and parameter": (None, _H + "c p := {\n  a x = b p\n  b y = y\n}\n"),
     "a core's sibling outside it": ("ScopeError", _H + "c := {\n  a x = x\n}\nf := a\n"),
@@ -855,9 +872,20 @@ STAGEB: Dict[str, Tuple[Optional[str], str]] = {
     "natAdd of a truth value": (_TM, _H + "f := natAdd Yes Zero\n"),
     "natIfEq's outcomes of one type": (_TM, _H + "f := natIfEq Zero Zero Yes Zero\n"),
     "listLength of a numeral": (_TM, _H + "f := listLength Zero\n"),
-    # a list operation Stage B accepts waits for front1 to install the list
-    # operations, as it does the numeral operations (WORKLIST, M6)
     "listAt of the wrong element": (_TM, _H + "f := listAt (cons Zero nil) Zero Yes\n"),
+    # the operations installed: their terms, and the operations they use
+    "natDiv and natRem of numerals": (None, _H + "f := natDiv 7 2\ng := natRem 7 2\n"),
+    "natDiv and natRem by zero": (None, _H + "f := natDiv 7 0\ng := natRem 7 0\n"),
+    "natDiv's operations the prelude's": (None, _H + "natSub x y = x\nnatIfLe a b c d = c\nf := natDiv 3 2\n"),
+    # a core named as an operation another uses still denotes its loop
+    "a core named as natDiv's natSub": (None, _H + "natSub := {\n  loop x = Suc x\n}\nf := natDiv 3 2\ng := natSub Zero\n"),
+    "a core named as natMul's natAdd": (None, _H + "natAdd := {\n  loop x = Suc x\n}\nf := natMul 3 2\ng := natAdd Zero\n"),
+    "listLength of a list": (None, _H + "f := listLength (cons Zero nil)\n"),
+    "listAt of a list": (None, _H + "f := listAt (cons Zero nil) 1 Zero\n"),
+    "listAppend, listTake and listDrop of lists": (None, _H + "f := listAppend (cons Zero nil) (listTake (listDrop (cons 1 nil) 1) 2)\n"),
+    "a list operation the program defines": (None, _H + "listLength l = Zero\nf := listLength Yes\n"),
+    "every operation": (None, _H + "f := natAdd (natMul 2 3) (natDiv (natRem 9 4) (natSub 5 1))\n"
+                        "g := listAt (listAppend (listTake (cons 1 nil) 1) (listDrop nil 0)) (listLength nil) (natIfLe 1 2 Zero (natIfEq 3 3 1 2))\n"),
     # literals
     "a literal of the one numeral type": (None, _H + "f := Suc 3\n"),
     "a literal defaulted": (None, _H + "f := 3\n"),

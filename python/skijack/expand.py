@@ -887,7 +887,10 @@ def _expand_program(program: A.Program, env: Optional[Environment] = None,
             env.define_alias(op, K_(a("Y"), a(op + "Gen")))
             kinds[op] = ("prelude", op)
             used.add(op)
-            backend[op] = op
+            # an operation installed only for another's use is no name of
+            # the program's, so a core of its name still denotes its loop
+            if op in nat_ops:
+                backend[op] = op
 
         needed = set(nat_ops)
         if needed & {"natDiv", "natRem"}:
