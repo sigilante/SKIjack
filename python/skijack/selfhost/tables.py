@@ -102,6 +102,17 @@ RESERVED1 += [("WhnfF", "whnfF"), ("Path", "path")]
 #: path comparison a resolver calls, and `ns`, which before `{` opens one
 RESERVED1 += [("Scry", "Scry"), ("EQ5", "EQ5"), ("Ns", "ns")]
 
+#: and Stage A's (skijack/check.py): `EQ`, whose arguments must not be
+#: functions, and the prelude's names past the numeral operations above,
+#: which a program may name without defining (expand.program_prelude)
+RESERVED1 += [("EQ", "EQ"), ("NatDiv", "natDiv"), ("NatRem", "natRem"),
+              ("ListLength", "listLength"), ("ListAt", "listAt"), ("ListAppend", "listAppend"),
+              ("ListTake", "listTake"), ("ListDrop", "listDrop")]
+
+#: and a qualified name's, `a.b` in an expression: one name, as Python's
+#: parser reads it, which no table holds; `.` itself is no identifier
+RESERVED1 += [("Qual", ".")]
+
 RESERVED = RESERVED0
 
 

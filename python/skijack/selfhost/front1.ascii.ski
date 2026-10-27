@@ -186,7 +186,20 @@ nq    === NQ names ist
 qr    === QR nat nat
 gq    === GQ decls ist | GQErr
 oa    === OA outs memo
-result === ROk outs | RErr
+-- Stage A: the first problem's class, if any; the context it checks in,
+-- a core's, an application's spine, an equation found, and the heads a
+-- written step installs
+pa    === PANo | PAIs nat
+acx   === ACx nset nset cm tys decls ob mn ist names ident names
+cxt   === CxTop | CxCore nset nat decls
+spn   === Spn expr exprs
+meq   === MEqNone | MEq names expr
+hds   === HsNone | HsIs names
+-- a refusal carries its class (run1.CLASSES): 0 for a program the parser
+-- or the expander refuses, else Stage A's first problem's (check.py),
+-- 1 ScopeError, 2 ArityError, 3 CaseError, 4 DataError, 5 InterfaceError,
+-- 6 SymbolTableError
+result === ROk outs | RErr nat
 -- BEGIN GENERATED
 classify c = c |> { Code b6 b5 b4 b3 b2 b1 b0 (b6 |> { Lo (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo ChOther ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi (b0 |> { Lo ChNl ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi ChOther }) }) }) ; Hi ChOther }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChSpace ; Hi (ChSym SBang) }) ; Hi ChOther }) ; Hi (b1 |> { Lo ChOther ; Hi (b0 |> { Lo ChOther ; Hi ChPrime }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SLP) ; Hi (ChSym SRP) }) ; Hi (b0 |> { Lo (ChSym SStar) ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SComma) ; Hi (ChSym SMinus) }) ; Hi (b0 |> { Lo (ChSym SDot) ; Hi (ChSym SSlash) }) }) }) }) ; Hi (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit Zero) ; Hi (ChDigit (Suc Zero)) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc Zero))) ; Hi (ChDigit (Suc (Suc (Suc Zero)))) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc Zero))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc Zero)))))) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))) }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))) }) ; Hi (b0 |> { Lo (ChSym SColon) ; Hi (ChSym SSemi) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SLt) ; Hi (ChSym SEq) }) ; Hi (b0 |> { Lo (ChSym SGt) ; Hi (ChSym SQuest) }) }) }) }) }) }) ; Hi (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SAt) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLB) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBack) ; Hi (ChSym SRB) }) ; Hi (b0 |> { Lo (ChSym SCaret) ; Hi ChLetter }) }) }) }) }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLC) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBar) ; Hi (ChSym SRC) }) ; Hi ChOther }) }) }) }) }) }) }
 nameS := (NCons (Code Hi Lo Hi Lo Lo Hi Hi) NNil)
@@ -249,6 +262,15 @@ namePath := (NCons (Code Hi Hi Hi Lo Lo Lo Lo) (NCons (Code Hi Hi Lo Lo Lo Lo Hi
 nameScry := (NCons (Code Hi Lo Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Lo Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Lo) (NCons (Code Hi Hi Hi Hi Lo Lo Hi) NNil))))
 nameEQ5 := (NCons (Code Hi Lo Lo Lo Hi Lo Hi) (NCons (Code Hi Lo Hi Lo Lo Lo Hi) (NCons (Code Lo Hi Hi Lo Hi Lo Hi) NNil)))
 nameNs := (NCons (Code Hi Hi Lo Hi Hi Hi Lo) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) NNil))
+nameEQ := (NCons (Code Hi Lo Lo Lo Hi Lo Hi) (NCons (Code Hi Lo Hi Lo Lo Lo Hi) NNil))
+nameNatDiv := (NCons (Code Hi Hi Lo Hi Hi Hi Lo) (NCons (Code Hi Hi Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Lo Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Hi Hi Lo) NNil))))))
+nameNatRem := (NCons (Code Hi Hi Lo Hi Hi Hi Lo) (NCons (Code Hi Hi Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Hi Lo Lo Hi Lo) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Hi Hi Lo Hi) NNil))))))
+nameListLength := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Hi Hi Hi Lo) (NCons (Code Hi Hi Lo Lo Hi Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Lo) NNil))))))))))
+nameListAt := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) NNil))))))
+nameListAppend := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Lo Lo) (NCons (Code Hi Hi Hi Lo Lo Lo Lo) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Hi Hi Hi Lo) (NCons (Code Hi Hi Lo Lo Hi Lo Lo) NNil))))))))))
+nameListTake := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Hi Lo Hi Lo Lo) (NCons (Code Hi Hi Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Lo Hi Lo Hi Hi) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) NNil))))))))
+nameListDrop := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Lo Hi Lo Lo) (NCons (Code Hi Hi Hi Lo Lo Hi Lo) (NCons (Code Hi Hi Lo Hi Hi Hi Hi) (NCons (Code Hi Hi Hi Lo Lo Lo Lo) NNil))))))))
+nameQual := (NCons (Code Lo Hi Lo Hi Hi Hi Lo) NNil)
 idS := Id Bn
 idK := Id (Bo Bn)
 idI := Id (Bz (Bo Bn))
@@ -309,7 +331,16 @@ idPath := Id (Bz (Bz (Bz (Bo (Bo (Bo Bn))))))
 idScry := Id (Bo (Bz (Bz (Bo (Bo (Bo Bn))))))
 idEQ5 := Id (Bz (Bo (Bz (Bo (Bo (Bo Bn))))))
 idNs := Id (Bo (Bo (Bz (Bo (Bo (Bo Bn))))))
-seedNames := (NmCons (IdRaw nameS) (NmCons (IdRaw nameK) (NmCons (IdRaw nameI) (NmCons (IdRaw namePair) (NmCons (IdRaw nameHd) (NmCons (IdRaw nameTl) (NmCons (IdRaw nameNil) (NmCons (IdRaw nameCons) (NmCons (IdRaw nameZero) (NmCons (IdRaw nameSuc) (NmCons (IdRaw nameAt) (NmCons (IdRaw nameNone) (NmCons (IdRaw nameB) (NmCons (IdRaw nameC) (NmCons (IdRaw nameW) (NmCons (IdRaw nameY) (NmCons (IdRaw nameLoop) (NmCons (IdRaw nameNatAdd) (NmCons (IdRaw nameNatSub) (NmCons (IdRaw nameNatMul) (NmCons (IdRaw nameNatIfEq) (NmCons (IdRaw nameNatIfLe) (NmCons (IdRaw nameGRes) (NmCons (IdRaw nameGStep) (NmCons (IdRaw nameGLowC) (NmCons (IdRaw nameGSpApp) (NmCons (IdRaw nameGSp) (NmCons (IdRaw nameGRb1) (NmCons (IdRaw nameGRb) (NmCons (IdRaw nameGAcc) (NmCons (IdRaw nameGF) (NmCons (IdRaw nameGT) (NmCons (IdRaw nameGU) (NmCons (IdRaw nameGM) (NmCons (IdRaw nameGH) (NmCons (IdRaw nameGX) (NmCons (IdRaw nameGXs) (NmCons (IdRaw nameGArgs) (NmCons (IdRaw nameGY) (NmCons (IdRaw nameGZ) (NmCons (IdRaw nameGRest) (NmCons (IdRaw nameGR) (NmCons (IdRaw nameGR2) (NmCons (IdRaw nameGN) (NmCons (IdRaw nameGN2) (NmCons (IdRaw nameGLoop1) (NmCons (IdRaw nameGStepI) (NmCons (IdRaw nameGStepI1) (NmCons (IdRaw nameGStepK) (NmCons (IdRaw nameGStepK2) (NmCons (IdRaw nameGStepK1) (NmCons (IdRaw nameGStepS) (NmCons (IdRaw nameGStepS3) (NmCons (IdRaw nameGStepS2) (NmCons (IdRaw nameGStepS1) (NmCons (IdRaw nameWhnfF) (NmCons (IdRaw namePath) (NmCons (IdRaw nameScry) (NmCons (IdRaw nameEQ5) (NmCons (IdRaw nameNs) NmNil))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+idEQ := Id (Bz (Bz (Bo (Bo (Bo (Bo Bn))))))
+idNatDiv := Id (Bo (Bz (Bo (Bo (Bo (Bo Bn))))))
+idNatRem := Id (Bz (Bo (Bo (Bo (Bo (Bo Bn))))))
+idListLength := Id (Bo (Bo (Bo (Bo (Bo (Bo Bn))))))
+idListAt := Id (Bz (Bz (Bz (Bz (Bz (Bz (Bo Bn)))))))
+idListAppend := Id (Bo (Bz (Bz (Bz (Bz (Bz (Bo Bn)))))))
+idListTake := Id (Bz (Bo (Bz (Bz (Bz (Bz (Bo Bn)))))))
+idListDrop := Id (Bo (Bo (Bz (Bz (Bz (Bz (Bo Bn)))))))
+idQual := Id (Bz (Bz (Bo (Bz (Bz (Bz (Bo Bn)))))))
+seedNames := (NmCons (IdRaw nameS) (NmCons (IdRaw nameK) (NmCons (IdRaw nameI) (NmCons (IdRaw namePair) (NmCons (IdRaw nameHd) (NmCons (IdRaw nameTl) (NmCons (IdRaw nameNil) (NmCons (IdRaw nameCons) (NmCons (IdRaw nameZero) (NmCons (IdRaw nameSuc) (NmCons (IdRaw nameAt) (NmCons (IdRaw nameNone) (NmCons (IdRaw nameB) (NmCons (IdRaw nameC) (NmCons (IdRaw nameW) (NmCons (IdRaw nameY) (NmCons (IdRaw nameLoop) (NmCons (IdRaw nameNatAdd) (NmCons (IdRaw nameNatSub) (NmCons (IdRaw nameNatMul) (NmCons (IdRaw nameNatIfEq) (NmCons (IdRaw nameNatIfLe) (NmCons (IdRaw nameGRes) (NmCons (IdRaw nameGStep) (NmCons (IdRaw nameGLowC) (NmCons (IdRaw nameGSpApp) (NmCons (IdRaw nameGSp) (NmCons (IdRaw nameGRb1) (NmCons (IdRaw nameGRb) (NmCons (IdRaw nameGAcc) (NmCons (IdRaw nameGF) (NmCons (IdRaw nameGT) (NmCons (IdRaw nameGU) (NmCons (IdRaw nameGM) (NmCons (IdRaw nameGH) (NmCons (IdRaw nameGX) (NmCons (IdRaw nameGXs) (NmCons (IdRaw nameGArgs) (NmCons (IdRaw nameGY) (NmCons (IdRaw nameGZ) (NmCons (IdRaw nameGRest) (NmCons (IdRaw nameGR) (NmCons (IdRaw nameGR2) (NmCons (IdRaw nameGN) (NmCons (IdRaw nameGN2) (NmCons (IdRaw nameGLoop1) (NmCons (IdRaw nameGStepI) (NmCons (IdRaw nameGStepI1) (NmCons (IdRaw nameGStepK) (NmCons (IdRaw nameGStepK2) (NmCons (IdRaw nameGStepK1) (NmCons (IdRaw nameGStepS) (NmCons (IdRaw nameGStepS3) (NmCons (IdRaw nameGStepS2) (NmCons (IdRaw nameGStepS1) (NmCons (IdRaw nameWhnfF) (NmCons (IdRaw namePath) (NmCons (IdRaw nameScry) (NmCons (IdRaw nameEQ5) (NmCons (IdRaw nameNs) (NmCons (IdRaw nameEQ) (NmCons (IdRaw nameNatDiv) (NmCons (IdRaw nameNatRem) (NmCons (IdRaw nameListLength) (NmCons (IdRaw nameListAt) (NmCons (IdRaw nameListAppend) (NmCons (IdRaw nameListTake) (NmCons (IdRaw nameListDrop) (NmCons (IdRaw nameQual) NmNil)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 codeGt := (Code Lo Hi Hi Hi Hi Hi Lo)
 codeEqc := (Code Lo Hi Hi Hi Hi Lo Hi)
 codeMinus := (Code Lo Hi Lo Hi Hi Lo Hi)
@@ -462,7 +493,10 @@ papp ct ts = papp2 ct (patom ct ts)
 papp2 ct p = p |> { PFail PFail ; PE e r (headIs atomStart r |> { Yes (papp3 ct e (patom ct r)) ; No p }) }
 papp3 ct e p = p |> { PFail PFail ; PE a r (papp2 ct (PE (EApp (EAp e a)) r)) }
 patom ct ts = ts |> { TNil PFail ; TCons t r (patomT ct t r) }
-patomT ct t r = t |> { TName n (PE (EVar n) r) ; TAxis n (pwrap (EPick n) (patom ct r)) ; TTypeDecl PFail ; TCase PFail ; TAssign PFail ; TEq PFail ; TAlt PFail ; TLam (plam ct r) ; TDot PFail ; TSemi PFail ; TLP (pclose isRP (pexpr ct r)) ; TRP PFail ; TLB (pcell (pitems ct r)) ; TRB PFail ; TLC PFail ; TRC PFail ; TNl PFail ; TColon PFail ; TArrow PFail ; TMacro PFail ; TCMacro PFail ; TQOpen (pquote ct r) ; TQClose PFail ; TTurn PFail ; TFuel n PFail ; TFuelE PFail ; TScry (ppath ct r |> { PPFail PFail ; PP p r2 (PE (EScry p) r2) }) ; TNsOpen (pns ct r) ; TMapsTo PFail ; TComma PFail ; TSlash PFail ; TGlue PFail ; TNum n (PE (ENum n) r) ; TBad PFail }
+patomT ct t r = t |> { TName n (pqual (EVar n) r) ; TAxis n (pwrap (EPick n) (patom ct r)) ; TTypeDecl PFail ; TCase PFail ; TAssign PFail ; TEq PFail ; TAlt PFail ; TLam (plam ct r) ; TDot PFail ; TSemi PFail ; TLP (pclose isRP (pexpr ct r)) ; TRP PFail ; TLB (pcell (pitems ct r)) ; TRB PFail ; TLC PFail ; TRC PFail ; TNl PFail ; TColon PFail ; TArrow PFail ; TMacro PFail ; TCMacro PFail ; TQOpen (pquote ct r) ; TQClose PFail ; TTurn PFail ; TFuel n PFail ; TFuelE PFail ; TScry (ppath ct r |> { PPFail PFail ; PP p r2 (PE (EScry p) r2) }) ; TNsOpen (pns ct r) ; TMapsTo PFail ; TComma PFail ; TSlash PFail ; TGlue PFail ; TNum n (PE (ENum n) r) ; TBad PFail }
+-- a qualified name, `a.b.c`: a name and `.name` after it, one name that
+-- no table holds (parser.py atom)
+pqual e r = r |> { TNil (PE e r) ; TCons t r2 (isDot t |> { Yes (r2 |> { TNil (PE e r) ; TCons u r3 (nameOf u |> { MName m (pqual (EVar idQual) r3) ; MNone (PE e r) }) }) ; No (PE e r) }) }
 -- a path, one or more `/tag`, each perhaps with `[payload]`
 ppath ct r = headIs isSlash r |> { No PPFail ; Yes (pseg ct (ttl r)) }
 pseg ct r = r |> { TNil PPFail ; TCons t r2 (nameOf t |> { MNone PPFail ; MName g (headIs isLB r2 |> { Yes (pexpr ct (ttl r2) |> { PFail PPFail ; PE e r3 (want isRB r3 |> { MNo PPFail ; MT r4 (pmore ct g (ISome e) r4) }) }) ; No (headIs isGlue r2 |> { Yes (PP (PSeg g INone PNil) (ttl r2)) ; No (pmore ct g INone r2) }) }) }) }
@@ -946,14 +980,134 @@ ansCands on o2 r2 ds = ds |> { DNil NmNil ; DCons d r (d |> { DType n cs fs (and
 ansOK on o2 r2 ds = ansCands on o2 r2 ds |> { NmNil Yes ; NmCons a r (r |> { NmNil (notB (eqId a idNone)) ; NmCons b r2 No }) }
 consFs fs = fs |> { FsNil Zero ; FsCons f r (f |> { NmNil (consFs r) ; NmCons a r2 (r2 |> { NmNil (consFs r) ; NmCons b r3 (r3 |> { NmNil (eqId b idPath |> { Yes (Suc (consFs r)) ; No (consFs r) }) ; NmCons c r4 (consFs r) }) }) }) }
 pathOK ds = ds |> { DNil Yes ; DCons d r (d |> { DType n cs fs (eqId n idPath |> { Yes (andB (eqN (lenN cs) two) (andB (eqN (lenN (nullsOf cs fs)) one) (eqN (consFs fs) one))) ; No (pathOK r) }) ; DEq n bs x (pathOK r) ; DDef n x (pathOK r) ; DMacro n ps c x (pathOK r) ; DCore n ps es (pathOK r) ; DCEq c n rn bs x (pathOK r) }) }
+-- Stage A (check.py), over the parsed program before macros and
+-- generation, as the expander checks before it expands: the first
+-- problem's class, in check.py's order.  The collect phase comes first: a
+-- name declared twice is a ScopeError, and so is an equation twice in a
+-- core; then the object type's and the path type's shapes, each an
+-- InterfaceError (find_object_type, find_path_type); then a binder named
+-- S, K or I, a ScopeError; then each declaration in turn.  Checking only
+-- refuses: nothing here changes a term
+pScope := PAIs one
+pArity := PAIs two
+pCase  := PAIs (Suc two)
+pData  := PAIs (Suc (Suc two))
+pIface := PAIs (Suc (Suc (Suc two)))
+pSym   := PAIs (Suc (Suc (Suc (Suc two))))
+aor a b = a |> { PANo b ; PAIs c (PAIs c) }
+stageA st ct ys ds = aor (aDup ds) (aor (aShape ds) (aor (aSKI ds |> { Yes pScope ; No PANo }) (aStart st ct ys ds)))
+-- the collect phase: every type, constructor, macro, equation, core and
+-- definition name shares one table (check.py declare)
+aNames ds = ds |> { DNil NmNil ; DCons d r (d |> { DEq n bs x (NmCons n (aNames r)) ; DDef n x (NmCons n (aNames r)) ; DType n cs fs (NmCons n (appN cs (aNames r))) ; DMacro n ps c x (NmCons n (aNames r)) ; DCore n ps es (NmCons n (aNames r)) ; DCEq c n rn bs x (aNames r) }) }
+aDup ds = orB (dupS (aNames ds) Ns0) (dupEqs ds) |> { Yes pScope ; No PANo }
+aShape ds = objOf ds ObNone |> { ObNone (aPath ds) ; Ob on cs fs apc (aPath ds) ; ObErr pIface }
+-- the first type named path is `Nil | Cons seg path` in shape: two
+-- constructors, one nullary and one of two fields, the second the path
+aPath ds = ds |> { DNil PANo ; DCons d r (d |> { DEq n bs x (aPath r) ; DDef n x (aPath r) ; DType n cs fs (eqId n idPath |> { Yes (andB (eqN (lenN cs) two) (andB (eqN (aNulls fs) one) (eqN (aConses fs) one)) |> { Yes PANo ; No pIface }) ; No (aPath r) }) ; DMacro n ps c x (aPath r) ; DCore n ps es (aPath r) ; DCEq c n rn bs x (aPath r) }) }
+aNulls fs = fs |> { FsNil Zero ; FsCons f r (isNilN f |> { Yes (Suc (aNulls r)) ; No (aNulls r) }) }
+aConses fs = fs |> { FsNil Zero ; FsCons f r (aConsF f |> { Yes (Suc (aConses r)) ; No (aConses r) }) }
+aConsF f = f |> { NmNil No ; NmCons a r (r |> { NmNil No ; NmCons b r2 (r2 |> { NmNil (eqId b idPath) ; NmCons c r3 No }) }) }
+-- a binder named S, K or I, anywhere: an equation's, a macro's parameter,
+-- a lambda's, a branch's (check.py isa_binders)
+aSKI ds = ds |> { DNil No ; DCons d r (orB (d |> { DEq n bs x (orB (anySKI bs) (skiE x)) ; DDef n x (skiE x) ; DType n cs fs No ; DMacro n ps c x (orB (anySKI ps) (skiE x)) ; DCore n ps es (aSKI es) ; DCEq c n rn bs x (orB (anySKI bs) (skiE x)) }) (aSKI r)) }
+-- the context: the names known everywhere, the macros, the constructors,
+-- the types, the program, the object type, the path type's segment type,
+-- the names, `step` before each leaf, before the application constructor
+-- and before every constructor
+aStart st ct ys ds = objOf ds ObNone |> { ObNone (aWalk (ACx (setOf (appN aFixed (takenOf ds)) Ns0) (aMacs ds) ct ys ds ObNone (aSeg ct st ds) st NmNil idNone NmNil) ds) ; ObErr pIface ; Ob on cs fs apc (lookPre nameGRes (leavesOf apc cs) st |> { NQ rs st2 (lookPre nameGStep cs st2 |> { NQ ss st3 (aWalk (ACx (setOf (appN aFixed (appN (takenOf ds) (aGen (leavesOf apc cs) rs))) Ns0) (aMacs ds) ct ys ds (Ob on cs fs apc) (aSeg ct st ds) st (aLeafSteps cs ss apc) (aAppStep cs ss apc) ss) ds) }) }) }
+-- the ISA, the Tier 1 birds and the prelude's names (expand.program_prelude)
+aFixed := NmCons idS (NmCons idK (NmCons idI (NmCons idB (NmCons idC (NmCons idW (NmCons idY (NmCons idPair (NmCons idHd (NmCons idTl (NmCons idNil (NmCons idCons (NmCons idZero (NmCons idSuc (NmCons idNatAdd (NmCons idNatSub (NmCons idNatMul (NmCons idNatIfEq (NmCons idNatIfLe (NmCons idNatDiv (NmCons idNatRem (NmCons idListLength (NmCons idListAt (NmCons idListAppend (NmCons idListTake (NmCons idListDrop NmNil)))))))))))))))))))))))))
+-- what generation adds at program level (generate.generated_names)
+aGen lv rs = appN (nms4 idGSpApp idGSp idGRb1 idGRb) (appN rs (appN (memN idI lv |> { Yes (nms2 idGStepI1 idGStepI) ; No NmNil }) (appN (memN idK lv |> { Yes (NmCons idGStepK2 (nms2 idGStepK1 idGStepK)) ; No NmNil }) (memN idS lv |> { Yes (nms4 idGStepS3 idGStepS2 idGStepS1 idGStepS) ; No NmNil }))))
+aLeafSteps cs ss apc = cs |> { NmNil NmNil ; NmCons c r (ss |> { NmNil NmNil ; NmCons s sr (eqId c apc |> { Yes (aLeafSteps r sr apc) ; No (NmCons s (aLeafSteps r sr apc)) }) }) }
+aAppStep cs ss apc = cs |> { NmNil idNone ; NmCons c r (ss |> { NmNil idNone ; NmCons s sr (eqId c apc |> { Yes s ; No (aAppStep r sr apc) }) }) }
+aMacs ds = ds |> { DNil Ns0 ; DCons d r (d |> { DEq n bs x (aMacs r) ; DDef n x (aMacs r) ; DType n cs fs (aMacs r) ; DMacro n ps c x (sAdd n (aMacs r)) ; DCore n ps es (aMacs r) ; DCEq c n rn bs x (aMacs r) }) }
+aSeg ct st ds = pathSx ct st ds |> { SXNone MNone ; SX nl cn sg ct2 st2 (MName sg) }
+gKnown g n = g |> { ACx k ms ct ys ds ob sg st sl sa ss (sHas n k) }
+gMac g n = g |> { ACx k ms ct ys ds ob sg st sl sa ss (sHas n ms) }
+gCt g = g |> { ACx k ms ct ys ds ob sg st sl sa ss ct }
+gYs g = g |> { ACx k ms ct ys ds ob sg st sl sa ss ys }
+gDs g = g |> { ACx k ms ct ys ds ob sg st sl sa ss ds }
+gOb g = g |> { ACx k ms ct ys ds ob sg st sl sa ss ob }
+gSg g = g |> { ACx k ms ct ys ds ob sg st sl sa ss sg }
+gSt g = g |> { ACx k ms ct ys ds ob sg st sl sa ss st }
+gSl g = g |> { ACx k ms ct ys ds ob sg st sl sa ss sl }
+gSa g = g |> { ACx k ms ct ys ds ob sg st sl sa ss sa }
+gSs g = g |> { ACx k ms ct ys ds ob sg st sl sa ss ss }
+-- each declaration in turn (check.py run); a core's equations hold its
+-- parameters first, so its binders past them are the equation's own
+aWalk g ds = ds |> { DNil PANo ; DCons d r (aor (aDecl g d) (aWalk g r)) }
+aDecl g d = d |> { DEq n bs x (aE g CxTop (setOf bs Ns0) No x) ; DDef n x (aDef g x) ; DType n cs fs PANo ; DMacro n ps c x (aE g CxTop (setOf ps Ns0) Yes x) ; DCore n ps es (aCore g ps es) ; DCEq c n rn bs x PANo }
+aSpine e as = e |> { EVar n (Spn e as) ; EApp p (p |> { EAp f a (aSpine f (XCons a as)) }) ; ECell xs (Spn e as) ; EPick k x (Spn e as) ; ECase x bs (Spn e as) ; ELam x b (Spn e as) ; EQuote b fu i (Spn e as) ; EScry p (Spn e as) ; ENs fs (Spn e as) ; ENum k (Spn e as) }
+aLenXs xs = xs |> { XNil Zero ; XCons x r (Suc (aLenXs r)) }
+-- an expression at level 0: g the context, c the core's, bd the names
+-- bound, m whether a macro's body, whose names are not checked
+aE g c bd m e = e |> { EVar n (aName g c bd m n) ; EApp p (aSpine e XNil |> { Spn h as (aor (aEqPos g c bd h as) (aor (aE g c bd m h) (aEs g c bd m as))) }) ; ECell xs (aEs g c bd m xs) ; EPick k x (aE g c bd m x) ; ECase x bs (aor (aE g c bd m x) (aCase g c bd m bs)) ; ELam x b (aE g c (sAdd x bd) m b) ; EQuote b fu i (aor (i |> { INone PANo ; ISome y (aE g c bd m y) }) (aQ g b)) ; EScry p pData ; ENs fs pData ; ENum k PANo }
+aEs g c bd m xs = xs |> { XNil PANo ; XCons x r (aor (aE g c bd m x) (aEs g c bd m r)) }
+aName g c bd m n = orB m (sHas n bd) |> { Yes PANo ; No (orB (gKnown g n) (c |> { CxTop No ; CxCore ks np es (sHas n ks) }) |> { Yes PANo ; No pScope }) }
+-- a case is over one declared type, each constructor once and every one
+aCase g c bd m bs = bs |> { BNil pCase ; BCons b r (b |> { Br k ns y (findCI k (gCt g) |> { MCNone pCase ; MC i (i |> { CInfo k2 tn ix ar (aBrs g c bd m tn bs Ns0) }) }) }) }
+aBrs g c bd m tn bs sn = bs |> { BNil (findTy tn (gYs g) |> { MTNone PANo ; MTy cs (aAll cs sn |> { Yes PANo ; No pCase }) }) ; BCons b r (b |> { Br k ns y (findCI k (gCt g) |> { MCNone pCase ; MC i (i |> { CInfo k2 tk ix ar (andB (eqId tk tn) (notB (sHas k sn)) |> { No pCase ; Yes (aor (aE g c (setOf ns bd) m y) (aBrs g c bd m tn r (sAdd k sn))) }) }) }) }) }
+aAll ns s = ns |> { NmNil Yes ; NmCons n r (andB (sHas n s) (aAll r s)) }
+-- EQ's two arguments are not provably functions (check.py eq_position)
+aEqPos g c bd h as = h |> { EVar n (eqId n idEQ |> { Yes (aEqArgs g c bd as two) ; No PANo }) ; EApp p PANo ; ECell xs PANo ; EPick k x PANo ; ECase x bs PANo ; ELam x b PANo ; EQuote b fu i PANo ; EScry p PANo ; ENs fs PANo ; ENum k PANo }
+aEqArgs g c bd as k = k |> { Zero PANo ; Suc j (as |> { XNil PANo ; XCons x r (aor (aFn g c bd x |> { Yes pData ; No PANo }) (aEqArgs g c bd r j)) }) }
+-- what Stage A can prove a function (check.py provably_function)
+aFn g c bd e = e |> { EVar n (aFnH g c bd n Zero) ; EApp p (aSpine e XNil |> { Spn h as (h |> { EVar n (aFnH g c bd n (aLenXs as)) ; EApp q No ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b No ; EQuote b fu i No ; EScry p No ; ENs fs No ; ENum k No }) }) ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b Yes ; EQuote b fu i No ; EScry p No ; ENs fs Yes ; ENum k No }
+aFnH g c bd n k = sHas n bd |> { Yes No ; No (orB (isSKI n) (memN n (NmCons idB (NmCons idC (NmCons idW (NmCons idY NmNil))))) |> { Yes Yes ; No (findCI n (gCt g) |> { MC i (i |> { CInfo k2 tn ix ar (notB (geN k ar)) }) ; MCNone (orB (gMac g n) (orB (aEqBs (gDs g) n) (orB (c |> { CxTop No ; CxCore ks np es (aCoreBs es np n) }) (memN n (coreNames (gDs g)))))) }) }) }
+aEqBs ds n = ds |> { DNil No ; DCons d r (d |> { DEq m bs x (eqId m n |> { Yes (notB (isNilN bs)) ; No (aEqBs r n) }) ; DDef m x (aEqBs r n) ; DType m cs fs (aEqBs r n) ; DMacro m ps c x (aEqBs r n) ; DCore m ps es (aEqBs r n) ; DCEq c m rn bs x (aEqBs r n) }) }
+aCoreBs es np n = aFindEq es n |> { MEqNone No ; MEq bs x (geN (lenN bs) (Suc np)) }
+aFindEq es n = es |> { DNil MEqNone ; DCons d r (d |> { DEq m bs x (eqId m n |> { Yes (MEq bs x) ; No (aFindEq r n) }) ; DDef m x (aFindEq r n) ; DType m cs fs (aFindEq r n) ; DMacro m ps c x (aFindEq r n) ; DCore m ps es2 (aFindEq r n) ; DCEq c m rn bs x (aFindEq r n) }) }
+-- inside a quotation (check.py quoted): a name is the object type's
+-- constructor, or a level-0 name, a constructor saturated; nothing binds
+aQ g e = e |> { EVar n (aQHead g n Zero) ; EApp p (aSpine e XNil |> { Spn h as (aor (aQs g as) (h |> { EVar n (aQHead g n (aLenXs as)) ; EApp q (aQ g h) ; ECell xs (aQ g h) ; EPick k x (aQ g h) ; ECase x bs (aQ g h) ; ELam x b (aQ g h) ; EQuote b fu i (aQ g h) ; EScry q (aQ g h) ; ENs fs (aQ g h) ; ENum k (aQ g h) })) }) ; ECell xs (aQs g xs) ; EPick k x (aQ g x) ; ECase x bs (aor (aQ g x) (aQBs g bs)) ; ELam x b (aQ g b) ; EQuote b fu i (aor (isDatum fu i |> { Yes PANo ; No pData }) (aQ g b)) ; EScry p (aor (aPathL g p) (gOb g |> { ObNone PANo ; ObErr PANo ; Ob on cs fs apc (memN idScry (leavesOf apc cs) |> { Yes PANo ; No pSym }) })) ; ENs fs pData ; ENum k pData }
+aQs g xs = xs |> { XNil PANo ; XCons x r (aor (aQ g x) (aQs g r)) }
+aQBs g bs = bs |> { BNil PANo ; BCons b r (b |> { Br k ns y (aor (aQ g y) (aQBs g r)) }) }
+aQHead g n k = (gOb g |> { ObNone No ; ObErr No ; Ob on cs fs apc (memN n cs) }) |> { Yes PANo ; No (gKnown g n |> { No pSym ; Yes (findCI n (gCt g) |> { MCNone PANo ; MC i (i |> { CInfo k2 tn ix ar (eqN k ar |> { Yes PANo ; No pArity }) }) }) }) }
+-- a path literal (check.py path_literal): the path type declared; each
+-- segment a tag, no payload, its constructor a nullary one of the
+-- segment type
+aPathL g p = gSg g |> { MNone pScope ; MName sg (aSegs g sg p) }
+aSegs g sg p = p |> { PNil PANo ; PSeg t pay r (aor (pay |> { ISome x pData ; INone (aSegC g sg t) }) (aSegs g sg r)) }
+aSegC g sg t = gSt g |> { Ist tab rv nx (itGet (capFirst (nameFor rv t)) tab |> { MIdNone pScope ; MId b (findCI (Id b) (gCt g) |> { MCNone pScope ; MC i (i |> { CInfo c tn ix ar (eqId tn sg |> { No pScope ; Yes (ar |> { Zero PANo ; Suc j pArity }) }) }) }) }) }
+-- a definition (check.py definition): a namespace literal's facts, each
+-- a path and a datum; a quotation, its interpreter a core applied to all
+-- its parameters; anything else an expression
+aDef g x = x |> { EVar n (aE g CxTop Ns0 No x) ; EApp p (aE g CxTop Ns0 No x) ; ECell xs (aE g CxTop Ns0 No x) ; EPick k y (aE g CxTop Ns0 No x) ; ECase y bs (aE g CxTop Ns0 No x) ; ELam y b (aE g CxTop Ns0 No x) ; EQuote b fu i (aor (i |> { INone PANo ; ISome y (aInterp g y) }) (aQ g b)) ; EScry p (aE g CxTop Ns0 No x) ; ENs fs (aFacts g fs) ; ENum k (aE g CxTop Ns0 No x) }
+aFacts g fs = fs |> { FtNil PANo ; FtCons p v r (aor (aPathL g p) (aor (v |> { EVar n pData ; EApp q pData ; ECell xs pData ; EPick k y pData ; ECase y bs pData ; ELam y b pData ; EQuote b fu i (isDatum fu i |> { Yes (aQ g b) ; No pData }) ; EScry q pData ; ENs gs pData ; ENum k pData }) (aFacts g r))) }
+aInterp g y = aSpine y XNil |> { Spn h as (h |> { EVar n (aCoreOf (gDs g) n |> { MEqNone pIface ; MEq ps x (eqN (aLenXs as) (lenN ps) |> { Yes PANo ; No pIface }) }) ; EApp q pIface ; ECell xs pIface ; EPick k x pIface ; ECase x bs pIface ; ELam x b pIface ; EQuote b fu i pIface ; EScry q pIface ; ENs fs pIface ; ENum k pIface }) }
+aCoreOf ds n = ds |> { DNil MEqNone ; DCons d r (d |> { DCore m ps es (eqId m n |> { Yes (MEq ps (EVar m)) ; No (aCoreOf r n) }) ; DEq m bs x (aCoreOf r n) ; DDef m x (aCoreOf r n) ; DType m cs fs (aCoreOf r n) ; DMacro m ps c x (aCoreOf r n) ; DCEq c m rn bs x (aCoreOf r n) }) }
+-- a core (check.py core): its equations, each with its parameters and
+-- binders bound and the core's names known; then an interpreter core's
+-- interface
+aCore g ps es = aor (aCoreEqs g (CxCore (setOf (appN ps (appN (orderOf es) (aCoreGen g es))) Ns0) (lenN ps) es) es) (aIsInterp g es |> { No PANo ; Yes (aIface g (lenN ps) es) })
+aCoreEqs g c es = es |> { DNil PANo ; DCons d r (aor (d |> { DEq n bs x (aE g c (setOf bs Ns0) No x) ; DDef n x PANo ; DType n cs fs PANo ; DMacro n ps m x PANo ; DCore n ps es2 PANo ; DCEq k n rn bs x PANo }) (aCoreEqs g c r)) }
+aIsInterp g es = gOb g |> { ObNone No ; ObErr No ; Ob on cs fs apc (orB (orB (memN idGStep (orderOf es)) (memN idLoop (orderOf es))) (anyIn (gSs g) (orderOf es))) }
+-- what generation adds to an interpreter core: `step`, and the loop unless
+-- it writes `loop` (generate.names_generation_adds)
+aCoreGen g es = aIsInterp g es |> { No NmNil ; Yes (appN (memN idGStep (orderOf es) |> { Yes NmNil ; No (nms1 idGStep) }) (memN idLoop (orderOf es) |> { Yes NmNil ; No (nms2 idLoop idGLoop1) })) }
+-- the interface (check.py interface): no step for the application
+-- constructor; a written `step` takes the term and installs the leaves'
+-- steps in declaration order; a written `loop` the fuel and the term;
+-- `loop1` only with `loop`, and the loop, the term and the fuel left
+aIface g np es = aor (memN (gSa g) (orderOf es) |> { Yes pIface ; No PANo }) (aor (aFindEq es idGStep |> { MEqNone PANo ; MEq bs x (aStep g np bs x) }) (aor (aFindEq es idLoop |> { MEqNone PANo ; MEq bs x (eqN (minus (lenN bs) np) two |> { Yes PANo ; No pIface }) }) (aFindEq es idGLoop1 |> { MEqNone PANo ; MEq bs x (memN idLoop (orderOf es) |> { No pIface ; Yes (eqN (minus (lenN bs) np) (Suc two) |> { Yes PANo ; No pIface }) }) })))
+aStep g np bs x = eqN (minus (lenN bs) np) one |> { No pIface ; Yes (aSpine x XNil |> { Spn h as (h |> { EVar n (eqId n idGSp |> { No PANo ; Yes (eqN (aLenXs as) (Suc (Suc (lenN (gSl g)))) |> { No pIface ; Yes (aHeads (aDrop2 as) |> { HsNone PANo ; HsIs ns (andB (aAllIn (gSl g) ns) (notB (aEqNs ns (gSl g))) |> { Yes pIface ; No PANo }) }) }) }) ; EApp q PANo ; ECell xs PANo ; EPick k y PANo ; ECase y b2 PANo ; ELam y b PANo ; EQuote b fu i PANo ; EScry q PANo ; ENs fs PANo ; ENum k PANo }) }) }
+-- each argument's head a name, or not every one; a permutation of the
+-- leaves' steps that is not their order is refused (check.py step_arm)
+aHeads xs = xs |> { XNil (HsIs NmNil) ; XCons x r (aSpine x XNil |> { Spn h as (h |> { EVar n (aHeads r |> { HsNone HsNone ; HsIs ns (HsIs (NmCons n ns)) }) ; EApp q HsNone ; ECell ys HsNone ; EPick k y HsNone ; ECase y b2 HsNone ; ELam y b HsNone ; EQuote b fu i HsNone ; EScry q HsNone ; ENs fs HsNone ; ENum k HsNone }) }) }
+aDrop2 xs = xs |> { XNil XNil ; XCons x r (r |> { XNil XNil ; XCons y r2 r2 }) }
+aAllIn ws ns = ws |> { NmNil Yes ; NmCons w r (andB (memN w ns) (aAllIn r ns)) }
+aEqNs a b = a |> { NmNil (b |> { NmNil Yes ; NmCons y r No }) ; NmCons x r (b |> { NmNil No ; NmCons y s (andB (eqId x y) (aEqNs r s)) }) }
 -- the front end: characters to every name's term
 front s = frontA (intern (lx s) seeded)
 frontA q = q |> { IR raw st (front2 st raw) }
-front2 st raw = cc TNl raw |> { CRFail RErr ; CR is ys (front2b st (ciMap is Cm0) ys raw) }
+front2 st raw = cc TNl raw |> { CRFail (RErr Zero) ; CR is ys (dupS (ciNames is) Ns0 |> { Yes (RErr Zero) ; No (front2b st (ciMap is Cm0) ys raw) }) }
+-- pass one refuses a constructor declared twice (parser.py collect_ctors)
+ciNames is = is |> { CiNil NmNil ; CiCons x r (x |> { CInfo n tn i k (NmCons n (ciNames r)) }) }
 front2b st ct ys raw = front3 st ct ys (pprog ct (nlf TNl TNl Zero BkNil raw))
-front3 st ct ys p = p |> { PDFail RErr ; PD ds0 (genProg ds0 st |> { GQErr RErr ; GQ ds1 st1 (front3x st1 ct ys ds0 ds1) }) }
-front3x st ct ys ds0 ds1 = xpand (macsOf ds1 McNil) ds1 |> { PDFail RErr ; PD ds (orB (skiD ds) (orB (dupS (orderOf ds) Ns0) (orB (dupS (tyNames ys) Ns0) (orB (dupS (coreNames ds) Ns0) (dupEqs ds)))) |> { Yes RErr ; No (front3b (macsOf ds1 McNil) ct ys (natOps ds0) (coreIds st ds)) }) }
-front3b ms ct ys nops q = q |> { CQ ds st (qstrip (pathSx ct st ds) (objOf ds ObNone |> { Ob on cs fs apc (memN idScry (leavesOf apc cs)) ; ObNone No ; ObErr No }) ds Bn |> { QStFail RErr ; QSt qd qc (st |> { Ist tab rv nx (front4 rv ms ct ys ds nops qd (orderOf ds)) }) }) }
+front3 st ct ys p = p |> { PDFail (RErr Zero) ; PD ds0 (stageA st ct ys ds0 |> { PANo (genProg ds0 st |> { GQErr (RErr Zero) ; GQ ds1 st1 (front3x st1 ct ys ds0 ds1) }) ; PAIs c (RErr c) }) }
+front3x st ct ys ds0 ds1 = xpand (macsOf ds1 McNil) ds1 |> { PDFail (RErr Zero) ; PD ds (orB (skiD ds) (orB (dupS (orderOf ds) Ns0) (orB (dupS (tyNames ys) Ns0) (orB (dupS (coreNames ds) Ns0) (dupEqs ds)))) |> { Yes (RErr Zero) ; No (front3b (macsOf ds1 McNil) ct ys (natOps ds0) (coreIds st ds)) }) }
+front3b ms ct ys nops q = q |> { CQ ds st (qstrip (pathSx ct st ds) (objOf ds ObNone |> { Ob on cs fs apc (memN idScry (leavesOf apc cs)) ; ObNone No ; ObErr No }) ds Bn |> { QStFail (RErr Zero) ; QSt qd qc (st |> { Ist tab rv nx (front4 rv ms ct ys ds nops qd (orderOf ds)) }) }) }
 front4 rv ms ct ys ds nops qd o = front4a rv ms ct ys ds nops qd (appN o (prelNotIn (setOf o Ns0) (appN preludeNames nops)))
 front4a rv ms ct ys ds nops qd env = front5 rv ms ct ys ds nops qd env (loops ds) (loopAlias (setOf (memN idNatMul nops |> { Yes (NmCons idNatAdd env) ; No env }) Ns0) (loops ds))
 front5 rv ms ct ys ds nops qd env ls al = front5a rv ms ct ys ds nops qd env ls al (setOf (appN (notIn (l1Names qd) env) (appN (cidsOf ds) (rnKeys al))) Ns0) (eqsOf ct ys ds)
@@ -962,10 +1116,10 @@ front5b rv ms ct ys ds nops qd env ls al es0 dd = front5c rv ms ct ys ds nops qd
 front5c rv ms ct ys ds nops qd env ls al es0 dd st = st |> { Tst c stk m out (front6 rv ms ct ys ds qd env ls es0 (defRules es0 ct ys ds (eqRules es0 (groupsOf dd m out Gm0) dd (ctorRules ct ys (loopRules al (natRules nops preludeRules)))))) }
 -- without a quotation, nothing more; with one, the object type and the
 -- loop's types are required
-front6 rv ms ct ys ds qd env ls es0 rs = qd |> { QdNil (front8 rv ds env ls NmNil rs NmNil NmNil NmNil Me0) ; QdCons q r (objOf ds ObNone |> { ObNone RErr ; ObErr RErr ; Ob on cs fs apc (pickOR (candsOf on ds) |> { LTErr RErr ; LT sd dn val to ks o2 r2 (andB (ansOK on o2 r2 ds) (pathOK ds) |> { No RErr ; Yes (front6a rv ds env ls rs qd (QE apc (leavesOf apc cs)) (QX ms ct ys es0 (setOf (appN (pidsOf qd) (leafIds (leavesOf apc cs))) es0) (leafRen (leavesOf apc cs)) (QE apc (leavesOf apc cs)) ds (ansOf on o2 r2 ds) ls (bareOut (bareAll ds) (qNames qd) ds) (setOf (notIn (qNames qd) env) Ns0))) }) }) }) }
-front6a rv ds env ls rs qd qe x = qcomp (qbody x) x qe qd Ns0 |> { QOErr RErr ; QO nr dts l1 ck rt (front7a rv ds env ls qd (nrAdd nr rs) dts l1 ck rt qe) }
-front7a rv ds env ls qd rs dts l1 ck rt qe = rootsOK rs (setOf dts Ns0) rt |> { No RErr ; Yes (qe |> { QE apc lv (front8 rv ds env ls (qNames qd) rs dts l1 ck (seedMe lv Zero Me0)) }) }
-front8 rv ds env ls qn rs dts l1 ck me0 = badRs rs |> { Yes RErr ; No (front9 (outAll rv rs (appP (selfP (notIn qn env)) (appP (selfP dts) (appP (coreP (bareAll ds) qn ds) (appP (loopP ls) (selfP l1))))) me0) rs ck) }
+front6 rv ms ct ys ds qd env ls es0 rs = qd |> { QdNil (front8 rv ds env ls NmNil rs NmNil NmNil NmNil Me0) ; QdCons q r (objOf ds ObNone |> { ObNone (RErr Zero) ; ObErr (RErr Zero) ; Ob on cs fs apc (pickOR (candsOf on ds) |> { LTErr (RErr Zero) ; LT sd dn val to ks o2 r2 (andB (ansOK on o2 r2 ds) (pathOK ds) |> { No (RErr Zero) ; Yes (front6a rv ds env ls rs qd (QE apc (leavesOf apc cs)) (QX ms ct ys es0 (setOf (appN (pidsOf qd) (leafIds (leavesOf apc cs))) es0) (leafRen (leavesOf apc cs)) (QE apc (leavesOf apc cs)) ds (ansOf on o2 r2 ds) ls (bareOut (bareAll ds) (qNames qd) ds) (setOf (notIn (qNames qd) env) Ns0))) }) }) }) }
+front6a rv ds env ls rs qd qe x = qcomp (qbody x) x qe qd Ns0 |> { QOErr (RErr Zero) ; QO nr dts l1 ck rt (front7a rv ds env ls qd (nrAdd nr rs) dts l1 ck rt qe) }
+front7a rv ds env ls qd rs dts l1 ck rt qe = rootsOK rs (setOf dts Ns0) rt |> { No (RErr Zero) ; Yes (qe |> { QE apc lv (front8 rv ds env ls (qNames qd) rs dts l1 ck (seedMe lv Zero Me0)) }) }
+front8 rv ds env ls qn rs dts l1 ck me0 = badRs rs |> { Yes (RErr Zero) ; No (front9 (outAll rv rs (appP (selfP (notIn qn env)) (appP (selfP dts) (appP (coreP (bareAll ds) qn ds) (appP (loopP ls) (selfP l1))))) me0) rs ck) }
 -- the level-1 runs without a closed term are still made, for their errors
-front9 q rs ck = q |> { OA os me (forceAll rs ck me |> { MTm t RErr ; MTmNone (ROk os) }) }
+front9 q rs ck = q |> { OA os me (forceAll rs ck me |> { MTm t (RErr Zero) ; MTmNone (ROk os) }) }
 forceAll rs ck me = findMe idAt me |> { MTm t (MTm t) ; MTmNone (ck |> { NmNil MTmNone ; NmCons n r (tof rs n me NmNil |> { TM t me2 (forceAll rs r me2) }) }) }

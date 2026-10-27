@@ -1,15 +1,15 @@
 """The full language's front end, built in milestones (avon docs/WORKLIST.md,
 Stage 8): M1 cores, macros, signatures, the Tier 1 birds and the numeral
 operations; M2 interpreter generation; M3 quotation; M4 scries, paths and
-namespace literals; Lit numeral literals.  The checkers, M5 and M6, are to
-come.
+namespace literals; Lit numeral literals; M5 Stage A, each refusal with
+its class.  M6, Stage B, is to come.
 
 ``skijack/selfhost/front1.ascii.ski`` is compiled by this package, with
 checking.  With ``AVON`` naming an avon binary, the last tests run it
-through ``skijack.selfhost.run1`` against the expander with checking off:
-the corpus, each milestone's edge programs, random programs and the fixed
-point; otherwise they skip.  ``avon/tests/front1_check.sh`` runs the same
-checks at full size.
+through ``skijack.selfhost.run1`` against Stage A and then the expander
+with checking off: the corpus, each milestone's edge programs, random
+programs and the fixed point; otherwise they skip.
+``avon/tests/front1_check.sh`` runs the same checks at full size.
 """
 
 import functools
@@ -56,7 +56,16 @@ def test_the_front_end_compiles_with_checking():
 
 
 EDGES = {**run1.EDGES, **run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4,
-         **run1.EDGESL, **run1.EDGESB}
+         **run1.EDGESL, **run1.EDGESB, **run1.EDGES5}
+
+
+@pytest.mark.parametrize("what", list(run1.STAGEA))
+def test_each_stage_a_edge_is_classed_as_it_says(what):
+    """The reference itself, without Avon: each of M5's edges gets the class
+    it was written for, so the edges test what they name."""
+    want, text = run1.STAGEA[what]
+    ref = run1.reference(text)
+    assert (None if isinstance(ref, dict) else run1.CLASSES[ref]) == want
 
 
 AVON = os.environ.get("AVON")
