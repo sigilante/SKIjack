@@ -113,6 +113,10 @@ RESERVED1 += [("EQ", "EQ"), ("NatDiv", "natDiv"), ("NatRem", "natRem"),
 #: parser reads it, which no table holds; `.` itself is no identifier
 RESERVED1 += [("Qual", ".")]
 
+#: and Stage B's (skijack/typecheck.py): the prelude's numeral, list and
+#: cell types, by name, as a declared type of the name is the same type
+RESERVED1 += [("Fuel", "fuel"), ("List", "list"), ("Cell", "cell")]
+
 RESERVED = RESERVED0
 
 

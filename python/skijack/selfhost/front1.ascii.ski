@@ -195,10 +195,41 @@ cxt   === CxTop | CxCore nset nat decls
 spn   === Spn expr exprs
 meq   === MEqNone | MEq names expr
 hds   === HsNone | HsIs names
+lsr   === LsT bits | LsS sch | LsB
+-- Stage B: a verdict, the type store and its nodes, schemes, the
+-- environments, a binder's type, the pairs unification has seen, free
+-- variables, a type's fields, an item's core, the context, the items
+bv    === BOk | BNo
+lk    === LkNone | LkTo bits
+tnd   === TNV lk bool bool lk | TNC ident bitss | TNA bits bits bool mn bool mn bool
+bitss === BsNil | BsCons bits bitss
+nds   === Nd0 | NdT ndt
+ndt   === NdB mtn nds nds
+mtn   === MTn tnd | MTnNone
+sch   === Sch bitss bitss bits bitss els
+els   === ElNil | ElCons bits bits els
+bev   === Ev0 | EvT bevt
+bevt  === EvB msc bev bev
+msc   === MSc sch | MScNone
+bm    === Bm0 | BmT bmt
+bmt   === BmB mbt bm bm
+mbt   === MBt bits | MBtNone
+bs    === BS nds bits bev bev bm bitss
+bd    === BdNil | BdCons ident bits bd
+bps   === BpNil | BpCons bits bits bps
+fvr   === FV bitss bitss
+mfs   === MFs names | MFsNone
+bx    === BxTop | BxCore ren
+bgx   === BGx decls bits cm names rv
+bitm  === BIt ident ident names expr bx
+bits2 === BiNil | BiCons bitm bits2
+-- the parser's result: the declarations and the signatures, in order
+pq    === PQ decls sigs | PQFail
+sigs  === SgNil | SgCons ident names sigs
 -- a refusal carries its class (run1.CLASSES): 0 for a program the parser
 -- or the expander refuses, else Stage A's first problem's (check.py),
 -- 1 ScopeError, 2 ArityError, 3 CaseError, 4 DataError, 5 InterfaceError,
--- 6 SymbolTableError
+-- 6 SymbolTableError, then Stage B's (typecheck.py), 7 TypeMismatchError
 result === ROk outs | RErr nat
 -- BEGIN GENERATED
 classify c = c |> { Code b6 b5 b4 b3 b2 b1 b0 (b6 |> { Lo (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo ChOther ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi (b0 |> { Lo ChNl ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi ChOther }) }) }) ; Hi ChOther }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChSpace ; Hi (ChSym SBang) }) ; Hi ChOther }) ; Hi (b1 |> { Lo ChOther ; Hi (b0 |> { Lo ChOther ; Hi ChPrime }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SLP) ; Hi (ChSym SRP) }) ; Hi (b0 |> { Lo (ChSym SStar) ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SComma) ; Hi (ChSym SMinus) }) ; Hi (b0 |> { Lo (ChSym SDot) ; Hi (ChSym SSlash) }) }) }) }) ; Hi (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit Zero) ; Hi (ChDigit (Suc Zero)) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc Zero))) ; Hi (ChDigit (Suc (Suc (Suc Zero)))) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc Zero))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc Zero)))))) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))) }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))) }) ; Hi (b0 |> { Lo (ChSym SColon) ; Hi (ChSym SSemi) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SLt) ; Hi (ChSym SEq) }) ; Hi (b0 |> { Lo (ChSym SGt) ; Hi (ChSym SQuest) }) }) }) }) }) }) ; Hi (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SAt) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLB) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBack) ; Hi (ChSym SRB) }) ; Hi (b0 |> { Lo (ChSym SCaret) ; Hi ChLetter }) }) }) }) }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLC) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBar) ; Hi (ChSym SRC) }) ; Hi ChOther }) }) }) }) }) }) }
@@ -271,6 +302,9 @@ nameListAppend := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo
 nameListTake := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Hi Lo Hi Lo Lo) (NCons (Code Hi Hi Lo Lo Lo Lo Hi) (NCons (Code Hi Hi Lo Hi Lo Hi Hi) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) NNil))))))))
 nameListDrop := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) (NCons (Code Hi Lo Lo Lo Hi Lo Lo) (NCons (Code Hi Hi Hi Lo Lo Hi Lo) (NCons (Code Hi Hi Lo Hi Hi Hi Hi) (NCons (Code Hi Hi Hi Lo Lo Lo Lo) NNil))))))))
 nameQual := (NCons (Code Lo Hi Lo Hi Hi Hi Lo) NNil)
+nameFuel := (NCons (Code Hi Hi Lo Lo Hi Hi Lo) (NCons (Code Hi Hi Hi Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Hi Hi Lo Lo) NNil))))
+nameList := (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Lo Lo Hi) (NCons (Code Hi Hi Hi Lo Lo Hi Hi) (NCons (Code Hi Hi Hi Lo Hi Lo Lo) NNil))))
+nameCell := (NCons (Code Hi Hi Lo Lo Lo Hi Hi) (NCons (Code Hi Hi Lo Lo Hi Lo Hi) (NCons (Code Hi Hi Lo Hi Hi Lo Lo) (NCons (Code Hi Hi Lo Hi Hi Lo Lo) NNil))))
 idS := Id Bn
 idK := Id (Bo Bn)
 idI := Id (Bz (Bo Bn))
@@ -340,7 +374,10 @@ idListAppend := Id (Bo (Bz (Bz (Bz (Bz (Bz (Bo Bn)))))))
 idListTake := Id (Bz (Bo (Bz (Bz (Bz (Bz (Bo Bn)))))))
 idListDrop := Id (Bo (Bo (Bz (Bz (Bz (Bz (Bo Bn)))))))
 idQual := Id (Bz (Bz (Bo (Bz (Bz (Bz (Bo Bn)))))))
-seedNames := (NmCons (IdRaw nameS) (NmCons (IdRaw nameK) (NmCons (IdRaw nameI) (NmCons (IdRaw namePair) (NmCons (IdRaw nameHd) (NmCons (IdRaw nameTl) (NmCons (IdRaw nameNil) (NmCons (IdRaw nameCons) (NmCons (IdRaw nameZero) (NmCons (IdRaw nameSuc) (NmCons (IdRaw nameAt) (NmCons (IdRaw nameNone) (NmCons (IdRaw nameB) (NmCons (IdRaw nameC) (NmCons (IdRaw nameW) (NmCons (IdRaw nameY) (NmCons (IdRaw nameLoop) (NmCons (IdRaw nameNatAdd) (NmCons (IdRaw nameNatSub) (NmCons (IdRaw nameNatMul) (NmCons (IdRaw nameNatIfEq) (NmCons (IdRaw nameNatIfLe) (NmCons (IdRaw nameGRes) (NmCons (IdRaw nameGStep) (NmCons (IdRaw nameGLowC) (NmCons (IdRaw nameGSpApp) (NmCons (IdRaw nameGSp) (NmCons (IdRaw nameGRb1) (NmCons (IdRaw nameGRb) (NmCons (IdRaw nameGAcc) (NmCons (IdRaw nameGF) (NmCons (IdRaw nameGT) (NmCons (IdRaw nameGU) (NmCons (IdRaw nameGM) (NmCons (IdRaw nameGH) (NmCons (IdRaw nameGX) (NmCons (IdRaw nameGXs) (NmCons (IdRaw nameGArgs) (NmCons (IdRaw nameGY) (NmCons (IdRaw nameGZ) (NmCons (IdRaw nameGRest) (NmCons (IdRaw nameGR) (NmCons (IdRaw nameGR2) (NmCons (IdRaw nameGN) (NmCons (IdRaw nameGN2) (NmCons (IdRaw nameGLoop1) (NmCons (IdRaw nameGStepI) (NmCons (IdRaw nameGStepI1) (NmCons (IdRaw nameGStepK) (NmCons (IdRaw nameGStepK2) (NmCons (IdRaw nameGStepK1) (NmCons (IdRaw nameGStepS) (NmCons (IdRaw nameGStepS3) (NmCons (IdRaw nameGStepS2) (NmCons (IdRaw nameGStepS1) (NmCons (IdRaw nameWhnfF) (NmCons (IdRaw namePath) (NmCons (IdRaw nameScry) (NmCons (IdRaw nameEQ5) (NmCons (IdRaw nameNs) (NmCons (IdRaw nameEQ) (NmCons (IdRaw nameNatDiv) (NmCons (IdRaw nameNatRem) (NmCons (IdRaw nameListLength) (NmCons (IdRaw nameListAt) (NmCons (IdRaw nameListAppend) (NmCons (IdRaw nameListTake) (NmCons (IdRaw nameListDrop) (NmCons (IdRaw nameQual) NmNil)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+idFuel := Id (Bo (Bz (Bo (Bz (Bz (Bz (Bo Bn)))))))
+idList := Id (Bz (Bo (Bo (Bz (Bz (Bz (Bo Bn)))))))
+idCell := Id (Bo (Bo (Bo (Bz (Bz (Bz (Bo Bn)))))))
+seedNames := (NmCons (IdRaw nameS) (NmCons (IdRaw nameK) (NmCons (IdRaw nameI) (NmCons (IdRaw namePair) (NmCons (IdRaw nameHd) (NmCons (IdRaw nameTl) (NmCons (IdRaw nameNil) (NmCons (IdRaw nameCons) (NmCons (IdRaw nameZero) (NmCons (IdRaw nameSuc) (NmCons (IdRaw nameAt) (NmCons (IdRaw nameNone) (NmCons (IdRaw nameB) (NmCons (IdRaw nameC) (NmCons (IdRaw nameW) (NmCons (IdRaw nameY) (NmCons (IdRaw nameLoop) (NmCons (IdRaw nameNatAdd) (NmCons (IdRaw nameNatSub) (NmCons (IdRaw nameNatMul) (NmCons (IdRaw nameNatIfEq) (NmCons (IdRaw nameNatIfLe) (NmCons (IdRaw nameGRes) (NmCons (IdRaw nameGStep) (NmCons (IdRaw nameGLowC) (NmCons (IdRaw nameGSpApp) (NmCons (IdRaw nameGSp) (NmCons (IdRaw nameGRb1) (NmCons (IdRaw nameGRb) (NmCons (IdRaw nameGAcc) (NmCons (IdRaw nameGF) (NmCons (IdRaw nameGT) (NmCons (IdRaw nameGU) (NmCons (IdRaw nameGM) (NmCons (IdRaw nameGH) (NmCons (IdRaw nameGX) (NmCons (IdRaw nameGXs) (NmCons (IdRaw nameGArgs) (NmCons (IdRaw nameGY) (NmCons (IdRaw nameGZ) (NmCons (IdRaw nameGRest) (NmCons (IdRaw nameGR) (NmCons (IdRaw nameGR2) (NmCons (IdRaw nameGN) (NmCons (IdRaw nameGN2) (NmCons (IdRaw nameGLoop1) (NmCons (IdRaw nameGStepI) (NmCons (IdRaw nameGStepI1) (NmCons (IdRaw nameGStepK) (NmCons (IdRaw nameGStepK2) (NmCons (IdRaw nameGStepK1) (NmCons (IdRaw nameGStepS) (NmCons (IdRaw nameGStepS3) (NmCons (IdRaw nameGStepS2) (NmCons (IdRaw nameGStepS1) (NmCons (IdRaw nameWhnfF) (NmCons (IdRaw namePath) (NmCons (IdRaw nameScry) (NmCons (IdRaw nameEQ5) (NmCons (IdRaw nameNs) (NmCons (IdRaw nameEQ) (NmCons (IdRaw nameNatDiv) (NmCons (IdRaw nameNatRem) (NmCons (IdRaw nameListLength) (NmCons (IdRaw nameListAt) (NmCons (IdRaw nameListAppend) (NmCons (IdRaw nameListTake) (NmCons (IdRaw nameListDrop) (NmCons (IdRaw nameQual) (NmCons (IdRaw nameFuel) (NmCons (IdRaw nameList) (NmCons (IdRaw nameCell) NmNil))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
 codeGt := (Code Lo Hi Hi Hi Hi Hi Lo)
 codeEqc := (Code Lo Hi Hi Hi Hi Lo Hi)
 codeMinus := (Code Lo Hi Lo Hi Hi Lo Hi)
@@ -523,19 +560,21 @@ pbind k ts = k |> { Zero (PN NmNil ts) ; Suc j (ts |> { TNil PNFail ; TCons t r 
 pbind2 n q = q |> { PNFail PNFail ; PN ns r (PN (NmCons n ns) r) }
 -- parsing: declarations, one per line, each opened by a run of names; a
 -- signature is parsed and dropped; `:=` before `{` opens a core
-pprog ct ts = ts |> { TNil (PD DNil) ; TCons t r (isNl t |> { Yes (pprog ct r) ; No (pdecl ct (heads ts)) }) }
+pprog ct ts = ts |> { TNil (PQ DNil SgNil) ; TCons t r (isNl t |> { Yes (pprog ct r) ; No (pdecl ct (heads ts)) }) }
 heads ts = ts |> { TNil (HN NmNil ts) ; TCons t r (nameOf t |> { MNone (HN NmNil ts) ; MName n (hcons n (heads r)) }) }
 hcons n h = h |> { HN ns r (HN (NmCons n ns) r) }
-pdecl ct h = h |> { HN ns r (ns |> { NmNil PDFail ; NmCons n bs (r |> { TNil PDFail ; TCons t r2 (declOp t |> { OType (bs |> { NmNil (ptype ct n (ptc r2)) ; NmCons x y PDFail }) ; OEq (pdEnd ct (DEq n bs) (pexpr ct r2)) ; ODef (headIs isLC r2 |> { Yes (pcore ct n bs (pceqs ct bs (ttl r2))) ; No (bs |> { NmNil (pdEnd ct (DDef n) (pexpr ct r2)) ; NmCons x y PDFail }) }) ; OSig (bs |> { NmNil (psig ct r2) ; NmCons x y PDFail }) ; OMacro (pdEnd ct (DMacro n bs No) (pexpr ct r2)) ; OCMacro (pdEnd ct (DMacro n bs Yes) (pexpr ct r2)) ; ONone PDFail }) }) }) }
+pdecl ct h = h |> { HN ns r (ns |> { NmNil PQFail ; NmCons n bs (r |> { TNil PQFail ; TCons t r2 (declOp t |> { OType (bs |> { NmNil (ptype ct n (ptc r2)) ; NmCons x y PQFail }) ; OEq (pdEnd ct (DEq n bs) (pexpr ct r2)) ; ODef (headIs isLC r2 |> { Yes (pcore ct n bs (pceqs ct bs (ttl r2))) ; No (bs |> { NmNil (pdEnd ct (DDef n) (pexpr ct r2)) ; NmCons x y PQFail }) }) ; OSig (bs |> { NmNil (psig ct n NmNil r2) ; NmCons x y PQFail }) ; OMacro (pdEnd ct (DMacro n bs No) (pexpr ct r2)) ; OCMacro (pdEnd ct (DMacro n bs Yes) (pexpr ct r2)) ; ONone PQFail }) }) }) }
 atEnd r = r |> { TNil Yes ; TCons t r2 (isNl t) }
-pdEnd ct f p = p |> { PFail PDFail ; PE e r (atEnd r |> { Yes (pdMore (f e) (pprog ct r)) ; No PDFail }) }
-pdMore d q = q |> { PDFail PDFail ; PD ds (PD (DCons d ds)) }
-ptype ct n q = q |> { PFFail PDFail ; PF cs fs r (atEnd r |> { Yes (pdMore (DType n cs fs) (pprog ct r)) ; No PDFail }) }
+pdEnd ct f p = p |> { PFail PQFail ; PE e r (atEnd r |> { Yes (pdMore (f e) (pprog ct r)) ; No PQFail }) }
+pdMore d q = q |> { PQFail PQFail ; PQ ds sg (PQ (DCons d ds) sg) }
+ptype ct n q = q |> { PFFail PQFail ; PF cs fs r (atEnd r |> { Yes (pdMore (DType n cs fs) (pprog ct r)) ; No PQFail }) }
 ptc r = r |> { TNil PFFail ; TCons t r2 (nameOf t |> { MNone PFFail ; MName c (ptc2 c (heads r2)) }) }
 ptc2 c h = h |> { HN fs r (headIs isAlt r |> { Yes (ptc (ttl r) |> { PFFail PFFail ; PF cs fss r2 (PF (NmCons c cs) (FsCons fs fss) r2) }) ; No (PF (NmCons c NmNil) (FsCons fs FsNil) r) }) }
-psig ct r = r |> { TNil PDFail ; TCons t r2 (nameOf t |> { MNone PDFail ; MName x (headIs isArrow r2 |> { Yes (psig ct (ttl r2)) ; No (atEnd r2 |> { Yes (pprog ct r2) ; No PDFail }) }) }) }
+psig ct n ts r = r |> { TNil PQFail ; TCons t r2 (nameOf t |> { MNone PQFail ; MName x (headIs isArrow r2 |> { Yes (psig ct n (appN ts (nms1 x)) (ttl r2)) ; No (atEnd r2 |> { Yes (psMore n (appN ts (nms1 x)) (pprog ct r2)) ; No PQFail }) }) }) }
+-- a signature, kept for Stage B: its name and its types, the result last
+psMore n ts q = q |> { PQFail PQFail ; PQ ds sg (PQ ds (SgCons n ts sg)) }
 -- a core's equations, to its `}`: each ends at a newline or the `}`
-pcore ct n ps q = q |> { PCFail PDFail ; PC es r (atEnd r |> { Yes (pdMore (DCore n ps es) (pprog ct r)) ; No PDFail }) }
+pcore ct n ps q = q |> { PCFail PQFail ; PC es r (atEnd r |> { Yes (pdMore (DCore n ps es) (pprog ct r)) ; No PQFail }) }
 pceqs ct ps ts = ts |> { TNil PCFail ; TCons t r (isNl t |> { Yes (pceqs ct ps r) ; No (isRC t |> { Yes (PC DNil r) ; No (pceq ct ps (heads ts)) }) }) }
 pceq ct ps h = h |> { HN ns r (ns |> { NmNil PCFail ; NmCons n bs (r |> { TNil PCFail ; TCons t r2 (declOp t |> { OEq (pceq2 ct ps (DEq n (appN ps bs)) (pexpr ct r2)) ; OType PCFail ; ODef PCFail ; OSig PCFail ; OMacro PCFail ; OCMacro PCFail ; ONone PCFail }) }) }) }
 pceq2 ct ps f p = p |> { PFail PCFail ; PE e r (atEndC r |> { Yes (pcMore (f e) (pceqs ct ps r)) ; No PCFail }) }
@@ -1098,6 +1137,457 @@ aHeads xs = xs |> { XNil (HsIs NmNil) ; XCons x r (aSpine x XNil |> { Spn h as (
 aDrop2 xs = xs |> { XNil XNil ; XCons x r (r |> { XNil XNil ; XCons y r2 r2 }) }
 aAllIn ws ns = ws |> { NmNil Yes ; NmCons w r (andB (memN w ns) (aAllIn r ns)) }
 aEqNs a b = a |> { NmNil (b |> { NmNil Yes ; NmCons y r No }) ; NmCons x r (b |> { NmNil No ; NmCons y s (andB (eqId x y) (aEqNs r s)) }) }
+-- Stage B (typecheck.py), over the generated program with its bodies
+-- macro-expanded, after Stage A, as the expander checks before it
+-- expands.  Every problem is a TypeMismatchError, so the first ends it:
+-- each step takes the state and a continuation, and a problem returns BNo.
+-- Types are nodes in a store keyed by number, as Python's objects are: a
+-- variable (its link, the data and numeral constraints, a list's element),
+-- a constructor and its arguments, and an arrow, whose elimination,
+-- nominal type, datum, checked and numeral marks unification changes in
+-- place.  Each node gets the next number, so the variables keep Python's
+-- order, which generalization sorts by
+--
+-- the store, the next number, the program's schemes, the cores' (by
+-- `core.eq`), the group's monotypes, the group's literals, latest first
+-- the context: the program, the FUEL node, the constructors, the declared
+-- numeral types, the names' texts
+ndPut b x m = m |> { Nd0 (ndPut b x (NdT (NdB MTnNone Nd0 Nd0))) ; NdT t (t |> { NdB v z o (b |> { Bn (NdT (NdB x z o)) ; Bz r (NdT (NdB v (ndPut r x z) o)) ; Bo r (NdT (NdB v z (ndPut r x o))) }) }) }
+ndGet b m = m |> { Nd0 MTnNone ; NdT t (t |> { NdB v z o (b |> { Bn v ; Bz r (ndGet r z) ; Bo r (ndGet r o) }) }) }
+evPut b x m = m |> { Ev0 (evPut b x (EvT (EvB MScNone Ev0 Ev0))) ; EvT t (t |> { EvB v z o (b |> { Bn (EvT (EvB x z o)) ; Bz r (EvT (EvB v (evPut r x z) o)) ; Bo r (EvT (EvB v z (evPut r x o))) }) }) }
+evGet b m = m |> { Ev0 MScNone ; EvT t (t |> { EvB v z o (b |> { Bn v ; Bz r (evGet r z) ; Bo r (evGet r o) }) }) }
+bmPut b x m = m |> { Bm0 (bmPut b x (BmT (BmB MBtNone Bm0 Bm0))) ; BmT t (t |> { BmB v z o (b |> { Bn (BmT (BmB x z o)) ; Bz r (BmT (BmB v (bmPut r x z) o)) ; Bo r (BmT (BmB v z (bmPut r x o))) }) }) }
+bmGet b m = m |> { Bm0 MBtNone ; BmT t (t |> { BmB v z o (b |> { Bn v ; Bz r (bmGet r z) ; Bo r (bmGet r o) }) }) }
+bmDel b m = m |> { Bm0 Bm0 ; BmT t (t |> { BmB v z o (b |> { Bn (BmT (BmB MBtNone z o)) ; Bz r (BmT (BmB v (bmDel r z) o)) ; Bo r (BmT (BmB v z (bmDel r o))) }) }) }
+-- the state's parts
+bsNode s b = s |> { BS m nx ev ce mo li (ndGet b m |> { MTn x x ; MTnNone (TNV LkNone No No LkNone) }) }
+bsSet s b x = s |> { BS m nx ev ce mo li (BS (ndPut b (MTn x) m) nx ev ce mo li) }
+bsNew s x k = s |> { BS m nx ev ce mo li (k nx (BS (ndPut nx (MTn x) m) (inc nx) ev ce mo li)) }
+bsEnv s n = s |> { BS m nx ev ce mo li (evGet (idBits n) ev) }
+bsEnvPut s n x = s |> { BS m nx ev ce mo li (BS m nx (evPut (idBits n) (MSc x) ev) ce mo li) }
+bsCEnv s n = s |> { BS m nx ev ce mo li (evGet (idBits n) ce) }
+bsCEnvPut s n x = s |> { BS m nx ev ce mo li (BS m nx ev (evPut (idBits n) (MSc x) ce) mo li) }
+bsMono s n = s |> { BS m nx ev ce mo li (bmGet (idBits n) mo) }
+bsMonoPut s n x = s |> { BS m nx ev ce mo li (BS m nx ev ce (bmPut (idBits n) (MBt x) mo) li) }
+bsMonoDel s n = s |> { BS m nx ev ce mo li (BS m nx ev ce (bmDel (idBits n) mo) li) }
+bsLits s = s |> { BS m nx ev ce mo li li }
+bsLitsSet s l = s |> { BS m nx ev ce mo li (BS m nx ev ce mo l) }
+bsLitAdd s t = s |> { BS m nx ev ce mo li (BS m nx ev ce mo (BsCons t li)) }
+gDecls g = g |> { BGx ds fu ct nu rv ds }
+gFuel g = g |> { BGx ds fu ct nu rv fu }
+gCts g = g |> { BGx ds fu ct nu rv ct }
+gNums g = g |> { BGx ds fu ct nu rv nu }
+gRv g = g |> { BGx ds fu ct nu rv rv }
+-- numbers, as lists and in order
+memB x xs = xs |> { BsNil No ; BsCons y r (orB (eqB x y) (memB x r)) }
+addB x xs = memB x xs |> { Yes xs ; No (BsCons x xs) }
+lenBs xs = xs |> { BsNil Zero ; BsCons x r (Suc (lenBs r)) }
+revB xs acc = xs |> { BsNil acc ; BsCons x r (revB r (BsCons x acc)) }
+cmpBits a b = a |> { Bn (b |> { Bn CEq ; Bz y CLt ; Bo y CLt }) ; Bz x (b |> { Bn CGt ; Bz y (cmpBits x y) ; Bo y (thenC (cmpBits x y) CLt) }) ; Bo x (b |> { Bn CGt ; Bz y (thenC (cmpBits x y) CGt) ; Bo y (cmpBits x y) }) }
+insB x xs = xs |> { BsNil (BsCons x BsNil) ; BsCons y r (cmpBits x y |> { CLt (BsCons x xs) ; CEq (BsCons x xs) ; CGt (BsCons y (insB x r)) }) }
+sortB xs = xs |> { BsNil BsNil ; BsCons x r (insB x (sortB r)) }
+-- nodes: a fresh variable, a constructor, an arrow, an arrow's marks
+bVar d n e s k = bsNew s (TNV LkNone d n e) k
+bFresh s k = bVar No No LkNone s k
+bCon x as s k = bsNew s (TNC x as) k
+bArr p q el nm s k = bsNew s (TNA p q el nm No MNone No) k
+bRes s b = bsNode s b |> { TNV r d n e (r |> { LkNone b ; LkTo c (bRes s c) }) ; TNC x a b ; TNA p q el nm dt ck nu b }
+setElim s a v = bsNode s a |> { TNV r d n e s ; TNC x y s ; TNA p q el nm dt ck nu (bsSet s a (TNA p q v nm dt ck nu)) }
+setChecked s a c = bsNode s a |> { TNV r d n e s ; TNC x y s ; TNA p q el nm dt ck nu (bsSet s a (TNA p q el nm dt c nu)) }
+setDN s a dv nv = bsNode s a |> { TNV r d n e s ; TNC x y s ; TNA p q el nm dt ck nu (bsSet s a (TNA p q el nm dv ck nv)) }
+setElem s v x = bsNode s v |> { TNV r d n e (bsSet s v (TNV r d n (LkTo x))) ; TNC y z s ; TNA p q el nm dt ck nu s }
+-- _arrows: the last parameter's arrow made first; _scott: a datum's spine,
+-- only its first arrow an elimination, committed to the type
+bArrows ps r s k = ps |> { BsNil (k r s) ; BsCons p rest (bArrows rest r s (bArrowsK p k)) }
+bArrowsK p k t s = bArr p t No MNone s k
+bScott cs r nm s k = cs |> { BsNil (k r s) ; BsCons c0 rest (bArrows rest r s (bScottK c0 nm k)) }
+bScottK c0 nm k t s = bArr c0 t Yes (MName nm) s k
+bs1 a = BsCons a BsNil
+bs2 a b = BsCons a (bs1 b)
+bs3 a b c = BsCons a (bs2 b c)
+bs4 a b c d = BsCons a (bs3 b c d)
+-- the declared types: a type's constructors' fields, a constructor's
+-- type, the numeral and list types (typecheck.py numeral_types, list_types)
+tyFss ds n = ds |> { DNil MFsNone ; DCons d r (d |> { DEq m bs x (tyFss r n) ; DDef m x (tyFss r n) ; DType m cs fs (eqId m n |> { Yes (MFs cs) ; No (tyFss r n) }) ; DMacro m ps c x (tyFss r n) ; DCore m ps es (tyFss r n) ; DCEq c m rn bs x (tyFss r n) }) }
+isTy g n = tyFss (gDecls g) n |> { MFs cs Yes ; MFsNone No }
+tyFields ds n = ds |> { DNil FsNil ; DCons d r (d |> { DEq m bs x (tyFields r n) ; DDef m x (tyFields r n) ; DType m cs fs (eqId m n |> { Yes fs ; No (tyFields r n) }) ; DMacro m ps c x (tyFields r n) ; DCore m ps es (tyFields r n) ; DCEq c m rn bs x (tyFields r n) }) }
+ctorFs cs fs c = cs |> { NmNil MFsNone ; NmCons n r (fs |> { FsNil MFsNone ; FsCons f fr (eqId n c |> { Yes (MFs f) ; No (ctorFs r fr c) }) }) }
+ctorTy g c = findCI c (gCts g) |> { MC i (i |> { CInfo k tn ix ar (MName tn) }) ; MCNone MNone }
+numTys ds = ds |> { DNil NmNil ; DCons d r (d |> { DEq m bs x (numTys r) ; DDef m x (numTys r) ; DType m cs fs (isNumTy m fs |> { Yes (NmCons m (numTys r)) ; No (numTys r) }) ; DMacro m ps c x (numTys r) ; DCore m ps es (numTys r) ; DCEq c m rn bs x (numTys r) }) }
+isNumTy m fs = fs |> { FsNil No ; FsCons a r (r |> { FsNil No ; FsCons b r2 (andB (isNilN a) (andB (fsNil r2) (isOnly m b))) }) }
+isOnly m b = b |> { NmNil No ; NmCons x r3 (andB (eqId x m) (isNilN r3)) }
+fsNil fs = fs |> { FsNil Yes ; FsCons f r No }
+isNumeral g n = orB (eqId n idFuel) (memN n (gNums g))
+listElemOf ds n = tyFss ds n |> { MFsNone MNone ; MFs cs (isListTy n (tyFields ds n)) }
+isListTy n fs = fs |> { FsNil MNone ; FsCons a r (r |> { FsNil MNone ; FsCons b r2 (andB (isNilN a) (fsNil r2) |> { No MNone ; Yes (b |> { NmNil MNone ; NmCons x r3 (r3 |> { NmNil MNone ; NmCons y r4 (andB (eqId y n) (isNilN r4) |> { Yes (MName x) ; No MNone }) }) }) }) }) }
+-- field: a type a declaration names, a declared type or the prelude's fuel
+bField g n s k = isTy g n |> { Yes (bCon n BsNil s k) ; No (eqId n idFuel |> { Yes (k (gFuel g) s) ; No BNo }) }
+bFields g fs s k = fs |> { NmNil (k BsNil s) ; NmCons f r (bField g f s (bFieldsK g r k)) }
+bFieldsK g r k t s = bFields g r s (bFieldsK2 t k)
+bFieldsK2 t k ts s = k (BsCons t ts) s
+-- scott: what a datum of a type is when applied; none for any other
+bScottOf g t s k = bsNode s t |> { TNV r d n e BNo ; TNC x as (bFresh s (bScott1 g x as k)) ; TNA p q el nm dt ck nu BNo }
+bScott1 g x as k r s = isTy g x |> { Yes (bConts g (tyFields (gDecls g) x) r s (bScott2 r x k)) ; No (eqId x idFuel |> { Yes (bArr (gFuel g) r No MNone s (bScottFuel r k)) ; No (eqId x idList |> { Yes (bScottList as r s k) ; No (eqId x idCell |> { Yes (bScottCell as r s k) ; No BNo }) }) }) }
+bScott2 r x k cs s = bScott cs r x s k
+bScottFuel r k a s = bScott (bs2 r a) r idFuel s k
+bScottList as r s k = as |> { BsNil BNo ; BsCons a rest (bCon idList (bs1 a) s (bScottList2 a r k)) }
+bScottList2 a r k la s = bArrows (bs2 a la) r s (bScottList3 r k)
+bScottList3 r k c s = bScott (bs2 r c) r idList s k
+bScottCell as r s k = as |> { BsNil BNo ; BsCons a r2 (r2 |> { BsNil BNo ; BsCons b r3 (bArrows (bs2 a b) r s (bScottCell2 r k)) }) }
+bScottCell2 r k c s = bScott (bs1 c) r idCell s k
+bConts g cfs r s k = cfs |> { FsNil (k BsNil s) ; FsCons fs rest (bFields g fs s (bContsK g rest r k)) }
+bContsK g rest r k ts s = bArrows ts r s (bContsK2 g rest r k)
+bContsK2 g rest r k c s = bConts g rest r s (bContsK3 c k)
+bContsK3 c k cs s = k (BsCons c cs) s
+
+-- unification, oriented, expected against given; equirecursive, a pair
+-- met again assumed to hold.  The pairs seen are threaded, as Python's
+-- set is shared down one top-level call
+bUnify g e g0 s k = bUni g e g0 BpNil s (bUnifyK k)
+bUnifyK k sn s = k s
+bUni g e0 g0 sn s k = bUni2 g (bRes s e0) (bRes s g0) sn s k
+bUni2 g e gv sn s k = eqB e gv |> { Yes (k sn s) ; No (bsNode s e |> { TNV r d n el (bBind g e gv s (k sn)) ; TNC x xs (bUniC g e x xs gv sn s k) ; TNA p q el nm dt ck nu (bUniA g e gv sn s k) }) }
+bUniC g e x xs gv sn s k = bsNode s gv |> { TNV r d n el (bBind g gv e s (k sn)) ; TNC y ys (bSeen e gv sn s k (bConCon g x xs ys y)) ; TNA p q el nm dt ck nu (bSeen e gv sn s k (bConArr g e x gv)) }
+bUniA g e gv sn s k = bsNode s gv |> { TNV r d n el (bBind g gv e s (k sn)) ; TNC y ys (bSeen e gv sn s k (bArrCon g e gv y)) ; TNA p q el nm dt ck nu (bSeen e gv sn s k (bArrArr g e gv)) }
+bpHas a b ps = ps |> { BpNil No ; BpCons x y r (andB (eqB a x) (eqB b y) |> { Yes Yes ; No (bpHas a b r) }) }
+bSeen e gv sn s k f = bpHas e gv sn |> { Yes (k sn s) ; No (f (BpCons e gv sn) s k) }
+bConCon g x xs ys y sn s k = andB (eqId x y) (eqN (lenBs xs) (lenBs ys)) |> { No BNo ; Yes (bUniArgs g xs ys sn s k) }
+bUniArgs g xs ys sn s k = xs |> { BsNil (k sn s) ; BsCons a r (ys |> { BsNil (k sn s) ; BsCons b r2 (bUni g a b sn s (bUniArgsK g r r2 k)) }) }
+bUniArgsK g r r2 k sn s = bUniArgs g r r2 sn s k
+mnIs m y = m |> { MName x (eqId x y) ; MNone No }
+mnOther m y = m |> { MName x (notB (eqId x y)) ; MNone No }
+mnSome m = m |> { MName x Yes ; MNone No }
+mnClash a b = a |> { MName x (b |> { MName y (notB (eqId x y)) ; MNone No }) ; MNone No }
+mnOr a b = a |> { MName x a ; MNone b }
+-- an arrow against a datum: the datum applied, its Scott spine
+bArrCon g e gv y sn s k = bsNode s e |> { TNV r d n el BNo ; TNC x xs BNo ; TNA p q el nm dt ck nu (mnIs ck y |> { Yes (k sn s) ; No (andB el (mnOther nm y) |> { Yes BNo ; No (bScottOf g gv s (bArrCon2 g e y el sn k)) }) }) }
+bArrCon2 g e y el sn k sc s = el |> { Yes (bNominate g e y s (bArrCon3 g e y sc sn k)) ; No (bArrCon3 g e y sc sn k s) }
+bArrCon3 g e y sc sn k s = bUni g e sc sn (setChecked s e (MName y)) k
+-- a datum expected, an arrow given: only an elimination may be a datum
+bConArr g e x gv sn s k = bsNode s gv |> { TNV r d n el BNo ; TNC y ys BNo ; TNA p q el nm dt ck nu (el |> { No BNo ; Yes (mnOther nm x |> { Yes BNo ; No (mnIs ck x |> { Yes (k sn s) ; No (bScottOf g e s (bConArr2 g gv x sn k)) }) }) }) }
+bConArr2 g gv x sn k sc s = bNominate g gv x s (bConArr3 g gv x sc sn k)
+bConArr3 g gv x sc sn k s = bUni g gv sc sn (setChecked s gv (MName x)) k
+-- two arrows: their marks reconciled, then the parameters, flipped, and
+-- the results
+bArrArr g e gv sn s k = bsNode s e |> { TNV r d n el BNo ; TNC x xs BNo ; TNA ep eq eel enm edt eck enu (bsNode s gv |> { TNV r d n el BNo ; TNC x xs BNo ; TNA gp gq gel gnm gdt gck gnu (bAAF g e gv eel enm edt enu gel gnm gdt gnu s (bAAK g ep eq gp gq sn k)) }) }
+bAAF g e gv eel enm edt enu gel gnm gdt gnu s k = andB gel (notB eel) |> { Yes (k s) ; No (andB eel (notB gel) |> { Yes (orB (mnSome enm) edt |> { Yes BNo ; No (k (setElim s e No)) }) ; No (andB eel gel |> { No (k s) ; Yes (mnClash enm gnm |> { Yes BNo ; No (bAAM g e gv (mnOr enm gnm) (setDN (setDN s e (orB edt gdt) (orB enu gnu)) gv (orB edt gdt) (orB enu gnu)) k) }) }) }) }
+bAAM g e gv nm s k = nm |> { MName x (bNominate g e x s (bAAM2 g gv x k)) ; MNone (k s) }
+bAAM2 g gv x k s = bNominate g gv x s k
+bAAK g ep eq gp gq sn k s = bUni g gp ep sn s (bAAK2 g eq gq k)
+bAAK2 g eq gq k sn s = bUni g eq gq sn s k
+-- commit an elimination arrow to a type
+bNominate g a nm s k = bsNode s a |> { TNV r d n e (k s) ; TNC x y (k s) ; TNA p q el n0 dt ck nu (andB nu (notB (isNumeral g nm)) |> { Yes BNo ; No (k (bsSet s a (TNA p q el (MName nm) dt ck nu))) }) }
+-- bind: a variable's constraints met, then its link
+bBind g v t0 s k = bBind2 g v (bRes s t0) s k
+bBind2 g v t s k = eqB t v |> { Yes (k s) ; No (bsNode s v |> { TNV r d n e (d |> { Yes (bReqData g t BsNil s (bBindK1 g v t k)) ; No (bBindN g v t s k) }) ; TNC x y (k s) ; TNA p q el nm dt ck nu (k s) }) }
+bBindK1 g v t k sn s = bBindN g v t s k
+bBindN g v t s k = bsNode s v |> { TNV r d n e (n |> { Yes (bReqNum g t s (bBindE g v t k)) ; No (bBindE g v t k s) }) ; TNC x y (k s) ; TNA p q el nm dt ck nu (k s) }
+bBindE g v t k s = bsNode s v |> { TNV r d n e (e |> { LkNone (bLink v t k s) ; LkTo x (bReqList g t x s (bLink v t k)) }) ; TNC x y (k s) ; TNA p q el nm dt ck nu (k s) }
+bLink v t k s = bsNode s v |> { TNV r d n e (k (bsSet s v (TNV (LkTo t) d n e))) ; TNC x y (k s) ; TNA p q el nm dt ck nu (k s) }
+-- the data constraint: no function anywhere in a value of the type,
+-- through a cell's and a list's components; the nodes seen threaded
+bReqData g t0 sn s k = bReqD2 g (bRes s t0) sn s k
+bReqD2 g t sn s k = memB t sn |> { Yes (k sn s) ; No (bsNode s t |> { TNV r d n e (k (BsCons t sn) (bsSet s t (TNV r Yes n e))) ; TNC x as (bReqDs g as (BsCons t sn) s k) ; TNA p q el nm dt ck nu (el |> { No BNo ; Yes (k (BsCons t sn) (bsSet s t (TNA p q el nm Yes ck nu))) }) }) }
+bReqDs g as sn s k = as |> { BsNil (k sn s) ; BsCons a r (bReqData g a sn s (bReqDsK g r k)) }
+bReqDsK g r k sn s = bReqDs g r sn s k
+-- the numeral constraint: a numeral type, or an unknown datum that must
+-- become one
+bReqNum g t0 s k = bReqNum2 g (bRes s t0) s k
+bReqNum2 g t s k = bsNode s t |> { TNV r d n e (k (bsSet s t (TNV r d Yes e))) ; TNC x as (isNumeral g x |> { Yes (k s) ; No BNo }) ; TNA p q el nm dt ck nu (el |> { No BNo ; Yes (bReqNum3 g t nm (bsSet s t (TNA p q el nm Yes ck Yes)) k) }) }
+bReqNum3 g t nm s k = nm |> { MName x (bNominate g t x s k) ; MNone (k s) }
+-- the list constraint: a list of the element, the prelude's list, a
+-- declared list type, or an unknown datum eliminated as a list of them
+bReqList g t0 el s k = bReqL2 g (bRes s t0) el s k
+bReqL2 g t el s k = bsNode s t |> { TNV r d n e (e |> { LkNone (k (bsSet s t (TNV r d n (LkTo el)))) ; LkTo x (bUnify g x el s k) }) ; TNC x as (eqId x idList |> { Yes (as |> { BsNil BNo ; BsCons a rr (bUnify g a el s k) }) ; No (listElemOf (gDecls g) x |> { MName fe (bField g fe s (bReqLF g el k)) ; MNone BNo }) }) ; TNA p q e2 nm dt ck nu (e2 |> { No BNo ; Yes (bFresh s (bReqLA g t el k)) }) }
+bReqLF g el k ft s = bUnify g ft el s k
+bReqLA g t el k r s = bVar No No (LkTo el) s (bReqLA2 g t el k r)
+bReqLA2 g t el k r fv s = bArrows (bs2 el fv) r s (bReqLA3 g t k r)
+bReqLA3 g t k r c s = bArr c r No MNone s (bReqLA4 g t k r)
+bReqLA4 g t k r m s = bArr r m Yes MNone s (bReqLA5 g t k)
+bReqLA5 g t k sp s = bUnify g t sp s k
+
+-- instantiate: the quantified variables renamed, the type copied, each
+-- copy a hole first, linked to the node once made; a nullary constructor
+-- shared; the copies' marks as the original's
+bInst g sc s k = sc |> { Sch vs ds t ns els (bInstSub vs ds ns Bm0 s (bInst2 g els t k)) }
+bInstSub vs ds ns sub s k = vs |> { BsNil (k sub s) ; BsCons v r (bVar (memB v ds) (memB v ns) LkNone s (bInstSubK v r ds ns sub k)) }
+bInstSubK v r ds ns sub k w s = bInstSub r ds ns (bmPut v (MBt w) sub) s k
+bInst2 g els t k sub s = bInstEl g sub els Bm0 s (bInst3 g sub t k)
+bInstEl g sub els mo s k = els |> { ElNil (k mo s) ; ElCons v et r (bGo g sub et mo s (bInstElK g sub v r k)) }
+bInstElK g sub v r k e2 mo s = bInstEl g sub r mo (setElem s (bmGetD v sub) e2) k
+bmGetD b m = bmGet b m |> { MBt x x ; MBtNone b }
+bInst3 g sub t k mo s = bGo g sub t mo s (bInst4 k)
+bInst4 k t2 mo s = k t2 s
+bGo g sub t0 mo s k = bGo2 g sub (bRes s t0) mo s k
+bGo2 g sub t mo s k = bsNode s t |> { TNV r d n e (k (bmGetD t sub) mo s) ; TNC x as (bmGet t mo |> { MBt h (k h mo s) ; MBtNone (as |> { BsNil (k t mo s) ; BsCons a r (bFresh s (bGoCon g sub t x as mo k)) }) }) ; TNA p q el nm dt ck nu (bmGet t mo |> { MBt h (k h mo s) ; MBtNone (bFresh s (bGoArr g sub t p q el nm dt ck nu mo k)) }) }
+bGoCon g sub t x as mo k h s = bGoL g sub as (bmPut t (MBt h) mo) s (bGoCon2 x h k)
+bGoCon2 x h k as2 mo s = bCon x as2 s (bGoFill h mo k)
+bGoFill h mo k nw s = k nw mo (bsSet s h (TNV (LkTo nw) No No LkNone))
+bGoL g sub as mo s k = as |> { BsNil (k BsNil mo s) ; BsCons a r (bGo g sub a mo s (bGoLK g sub r k)) }
+bGoLK g sub r k a2 mo s = bGoL g sub r mo s (bGoLK2 a2 k)
+bGoLK2 a2 k as2 mo s = k (BsCons a2 as2) mo s
+bGoArr g sub t p q el nm dt ck nu mo k h s = bGo g sub p (bmPut t (MBt h) mo) s (bGoArr2 g sub q el nm dt ck nu h k)
+bGoArr2 g sub q el nm dt ck nu h k p2 mo s = bGo g sub q mo s (bGoArr3 p2 el nm dt ck nu h k)
+bGoArr3 p2 el nm dt ck nu h k q2 mo s = bsNew s (TNA p2 q2 el nm dt ck nu) (bGoFill h mo k)
+-- free: a type's unbound variables, a list's element followed once
+bFree t0 out sn s = bFree2 (bRes s t0) out sn s
+bFree2 t out sn s = bsNode s t |> { TNV r d n e (e |> { LkNone (FV (addB t out) sn) ; LkTo x (memB t sn |> { Yes (FV (addB t out) sn) ; No (bFree x (addB t out) (BsCons t sn) s) }) }) ; TNC x as (memB t sn |> { Yes (FV out sn) ; No (bFreeL as out (BsCons t sn) s) }) ; TNA p q el nm dt ck nu (memB t sn |> { Yes (FV out sn) ; No (bFreeQ q (bFree p out (BsCons t sn) s) s) }) }
+bFreeQ q r s = r |> { FV o sn (bFree q o sn s) }
+bFreeL as out sn s = as |> { BsNil (FV out sn) ; BsCons a r (bFreeL2 r (bFree a out sn s) s) }
+bFreeL2 r v s = v |> { FV o sn (bFreeL r o sn s) }
+fvOut v = v |> { FV o sn o }
+-- the environment's free variables: each program-level scheme's past its
+-- quantified ones, and the group's monotypes' (typecheck.py env_free)
+evFree ev s acc = ev |> { Ev0 acc ; EvT t (t |> { EvB v z o (evFree o s (evFree z s (v |> { MScNone acc ; MSc sc (sc |> { Sch vs ds u ns els (schFree vs (fvOut (bFree u BsNil BsNil s)) acc) }) }))) }) }
+schFree vs fv acc = fv |> { BsNil acc ; BsCons x r (schFree vs r (memB x vs |> { Yes acc ; No (addB x acc) })) }
+moFree mo s acc = mo |> { Bm0 acc ; BmT t (t |> { BmB v z o (moFree o s (moFree z s (v |> { MBtNone acc ; MBt x (fvOut (bFree x acc BsNil s)) }))) }) }
+bEnvFree s = s |> { BS m nx ev ce mo li (moFree mo s (evFree ev s BsNil)) }
+minusB a b = a |> { BsNil BsNil ; BsCons x r (memB x b |> { Yes (minusB r b) ; No (BsCons x (minusB r b)) }) }
+isDataV s v = bsNode s v |> { TNV r d n e d ; TNC x y No ; TNA p q el nm dt ck nu No }
+isNumV s v = bsNode s v |> { TNV r d n e n ; TNC x y No ; TNA p q el nm dt ck nu No }
+filtData s qs = qs |> { BsNil BsNil ; BsCons x r (isDataV s x |> { Yes (BsCons x (filtData s r)) ; No (filtData s r) }) }
+filtNum s qs = qs |> { BsNil BsNil ; BsCons x r (isNumV s x |> { Yes (BsCons x (filtNum s r)) ; No (filtNum s r) }) }
+elsOf s qs = qs |> { BsNil ElNil ; BsCons x r (bsNode s x |> { TNV lr d n e (e |> { LkNone (elsOf s r) ; LkTo y (ElCons x y (elsOf s r)) }) ; TNC y z (elsOf s r) ; TNA p q el nm dt ck nu (elsOf s r) }) }
+bSchOf t qs s = Sch qs (filtData s qs) t (filtNum s qs) (elsOf s qs)
+-- generalize: past the environment's; close: every free variable
+bGeneral t s = bSchOf t (sortB (minusB (fvOut (bFree t BsNil BsNil s)) (bEnvFree s))) s
+bClosed t s = bSchOf t (sortB (fvOut (bFree t BsNil BsNil s))) s
+-- the builtins (typecheck.py builtin), each built afresh and closed; k
+-- takes the scheme, or none
+bBuiltin g n s k = isSKI n |> { Yes (bBuiltinSKI g n s k) ; No (memN n (NmCons idB (NmCons idC (NmCons idW (NmCons idY NmNil)))) |> { Yes (bBuiltinBird g n s k) ; No (bBuiltinP g n s k) }) }
+bF2 s k = bFresh s (bF2K k)
+bF2K k a s = bFresh s (k a)
+bF3 s k = bFresh s (bF3K k)
+bF3K k a s = bF2 s (k a)
+bClose k t s = k (MSc (bClosed t s)) s
+bBuiltinSKI g n s k = eqId n idS |> { Yes (bF3 s (bBS k)) ; No (eqId n idK |> { Yes (bF2 s (bBK k)) ; No (bFresh s (bBI k)) }) }
+bBS k a b c s = bArrows (bs2 a b) c s (bBS2 k a b c)
+bBS2 k a b c i1 s = bArr a b No MNone s (bBS3 k a c i1)
+bBS3 k a c i1 i2 s = bArrows (bs3 i1 i2 a) c s (bClose k)
+bBK k a b s = bArrows (bs2 a b) a s (bClose k)
+bBI k a s = bArr a a No MNone s (bClose k)
+bBuiltinBird g n s k = eqId n idB |> { Yes (bF3 s (bBB k)) ; No (eqId n idC |> { Yes (bF3 s (bBC k)) ; No (eqId n idW |> { Yes (bF2 s (bBW k)) ; No (bFresh s (bBY k)) }) }) }
+bBB k a b c s = bArr b c No MNone s (bBB2 k a b c)
+bBB2 k a b c i1 s = bArr a b No MNone s (bBB3 k a c i1)
+bBB3 k a c i1 i2 s = bArrows (bs3 i1 i2 a) c s (bClose k)
+bBC k a b c s = bArrows (bs2 a b) c s (bBC2 k a b c)
+bBC2 k a b c i1 s = bArrows (bs3 i1 b a) c s (bClose k)
+bBW k a b s = bArrows (bs2 a a) b s (bBW2 k a b)
+bBW2 k a b i1 s = bArrows (bs2 i1 a) b s (bClose k)
+bBY k a s = bArr a a No MNone s (bBY2 k a)
+bBY2 k a i1 s = bArr i1 a No MNone s (bClose k)
+-- the prelude's, the numeral operations' and the list operations'
+bBuiltinP g n s k = eqId n idPair |> { Yes (bF2 s (bBPair k)) ; No (eqId n idHd |> { Yes (bF2 s (bBHd k)) ; No (eqId n idTl |> { Yes (bF2 s (bBTl k)) ; No (eqId n idNil |> { Yes (bFresh s (bBNil k)) ; No (eqId n idCons |> { Yes (bFresh s (bBCons k)) ; No (eqId n idZero |> { Yes (k (MSc (Sch BsNil BsNil (gFuel g) BsNil ElNil)) s) ; No (eqId n idSuc |> { Yes (bArr (gFuel g) (gFuel g) No MNone s (bBSuc k)) ; No (bBuiltinOps g n s k) }) }) }) }) }) }) }
+bBPair k a b s = bCon idCell (bs2 a b) s (bBPair2 k a b)
+bBPair2 k a b c s = bArrows (bs2 a b) c s (bClose k)
+bBHd k a b s = bCon idCell (bs2 a b) s (bBHd2 k a)
+bBHd2 k a c s = bArr c a No MNone s (bClose k)
+bBTl k a b s = bCon idCell (bs2 a b) s (bBHd2 k b)
+bBNil k a s = bCon idList (bs1 a) s (bClose k)
+bBCons k a s = bCon idList (bs1 a) s (bBCons2 k a)
+bBCons2 k a l1 s = bCon idList (bs1 a) s (bBCons3 k a l1)
+bBCons3 k a l1 l2 s = bArrows (bs2 a l1) l2 s (bClose k)
+bBSuc k t s = k (MSc (Sch BsNil BsNil t BsNil ElNil)) s
+bBuiltinOps g n s k = memN n (NmCons idNatAdd (NmCons idNatSub (NmCons idNatMul (NmCons idNatDiv (NmCons idNatRem NmNil))))) |> { Yes (bVar No Yes LkNone s (bBArith k)) ; No (memN n (NmCons idNatIfEq (NmCons idNatIfLe NmNil)) |> { Yes (bVar No Yes LkNone s (bBTest k)) ; No (memN n (NmCons idListLength (NmCons idListAt (NmCons idListAppend (NmCons idListTake (NmCons idListDrop NmNil))))) |> { Yes (bFresh s (bBList n k)) ; No (k MScNone s) }) }) }
+bBArith k a s = bArrows (bs2 a a) a s (bClose k)
+bBTest k a s = bFresh s (bBTest2 k a)
+bBTest2 k a b s = bArrows (bs4 a a b b) b s (bClose k)
+bBList n k e s = bVar No No (LkTo e) s (bBList2 n k e)
+bBList2 n k e ls s = bVar No Yes LkNone s (bBList3 n k e ls)
+bBList3 n k e ls nn s = eqId n idListLength |> { Yes (bArr ls nn No MNone s (bClose k)) ; No (eqId n idListAt |> { Yes (bArrows (bs3 ls nn e) e s (bClose k)) ; No (eqId n idListAppend |> { Yes (bArrows (bs2 ls ls) ls s (bClose k)) ; No (bArrows (bs2 ls nn) ls s (bClose k)) }) }) }
+-- lookup: the bound names, the ISA, the core's own, the group's, the
+-- program's, then the builtins
+bdGet n bd = bd |> { BdNil MBtNone ; BdCons m t r (eqId n m |> { Yes (MBt t) ; No (bdGet n r) }) }
+bLookup g n bd cx s k = bLookFrom g n (bLookWhere n bd cx s) s (bLookInst g k)
+bLookWhere n bd cx s = bdGet n bd |> { MBt t (LsT t) ; MBtNone (isSKI n |> { Yes LsB ; No (cx |> { BxTop (bLook3 n s) ; BxCore rn (rnFind n rn |> { MNone (bLook3 n s) ; MName c (bsMono s c |> { MBt t (LsT t) ; MBtNone (bsCEnv s c |> { MSc sc (LsS sc) ; MScNone (bLook3 n s) }) }) }) }) }) }
+bLook3 n s = bsMono s n |> { MBt t (LsT t) ; MBtNone (bsEnv s n |> { MSc sc (LsS sc) ; MScNone LsB }) }
+bLookFrom g n w s k = w |> { LsT t (k (LsT t) s) ; LsS sc (k (LsS sc) s) ; LsB (bBuiltin g n s (bLookBK k)) }
+bLookBK k m s = m |> { MSc sc (k (LsS sc) s) ; MScNone BNo }
+bLookInst g k w s = w |> { LsT t (k t s) ; LsS sc (bInst g sc s k) ; LsB BNo }
+
+-- inference over a macro-expanded body; k takes its type
+bInfer g e bd cx s k = e |> { EVar n (bLookup g n bd cx s k) ; EApp p (aSpine e XNil |> { Spn h as (bInfer g h bd cx s (bInferArgs g (bIsEq h) as Zero bd cx k)) }) ; ECell xs (bInferL g xs bd cx s (bInferCell k)) ; EPick ax x (bInfer g x bd cx s (bInferPick g (axBits ax BkNil) k)) ; ECase x bs (bInferCase g x bs bd cx s k) ; ELam x b (bFresh s (bInferLam g x b bd cx k)) ; EQuote b fu i (bFresh s k) ; EScry p (bFresh s k) ; ENs fs (bFresh s k) ; ENum m (bFresh s (bLit k)) }
+bLit k t s = k t (bsLitAdd s t)
+bInferLam g x b bd cx k p s = bInfer g b (BdCons x p bd) cx s (bInferLam2 p k)
+bInferLam2 p k bt s = bArr p bt No MNone s k
+bIsEq h = h |> { EVar n (eqId n idEQ) ; EApp p No ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b No ; EQuote b fu i No ; EScry p No ; ENs fs No ; ENum k No }
+lt2 i = i |> { Zero Yes ; Suc j (j |> { Zero Yes ; Suc k No }) }
+-- each argument: EQ's first two through a data variable, then the
+-- function type unified with an elimination of it
+bInferArgs g eq as i bd cx k tf s = as |> { XNil (k tf s) ; XCons x r (bInfer g x bd cx s (bIA2 g eq r i bd cx k tf)) }
+bIA2 g eq r i bd cx k tf tx s = bIAData g (andB eq (lt2 i)) tx s (bIA3 g eq r i bd cx k tf)
+bIAData g b tx s k = b |> { Yes (bVar Yes No LkNone s (bIAD g tx k)) ; No (k tx s) }
+bIAD g tx k d s = bUnify g d tx s (bIAD2 k d)
+bIAD2 k d s = k d s
+bIA3 g eq r i bd cx k tf tx s = bFresh s (bIA4 g eq r i bd cx k tf tx)
+bIA4 g eq r i bd cx k tf tx rv s = bArr tx rv Yes MNone s (bIA5 g eq r i bd cx k tf rv)
+bIA5 g eq r i bd cx k tf rv ar s = bUnify g ar tf s (bInferArgs g eq r (Suc i) bd cx k rv)
+-- a cell: its items' types paired from the right
+bInferL g xs bd cx s k = xs |> { XNil (k BsNil s) ; XCons x r (bInfer g x bd cx s (bInferLK g r bd cx k)) }
+bInferLK g r bd cx k t s = bInferL g r bd cx s (bInferLK2 t k)
+bInferLK2 t k ts s = k (BsCons t ts) s
+bInferCell k ts s = bCellFold ts s k
+bCellFold ts s k = ts |> { BsNil BNo ; BsCons t r (r |> { BsNil (k t s) ; BsCons u r2 (bCellFold r s (bCellK t k)) }) }
+bCellK t k ct s = bCon idCell (bs2 t ct) s k
+-- a pick: the axis's bits after its first, a head for 0, a tail for 1
+oddN n = n |> { Zero No ; Suc m (notB (oddN m)) }
+halfN n = n |> { Zero Zero ; Suc m (m |> { Zero Zero ; Suc j (Suc (halfN j)) }) }
+axBits n acc = n |> { Zero acc ; Suc m (m |> { Zero acc ; Suc j (axBits (halfN n) (BkCons (oddN n) acc)) }) }
+bInferPick g bs k t s = bs |> { BkNil (k t s) ; BkCons b r (bFresh s (bPick1 g b r k t)) }
+bPick1 g b r k t a s = bFresh s (bPick2 g b r k t a)
+bPick2 g b r k t a c s = bCon idCell (bs2 a c) s (bPick3 g b r k t a c)
+bPick3 g b r k t a c cl s = bUnify g cl t s (bPick4 g b r k a c)
+bPick4 g b r k a c s = bInferPick g r k (b |> { Yes c ; No a }) s
+-- a case, nominally: the scrutinee of the first branch's type, each
+-- branch's binders its fields' types, one result
+bInferCase g x bs bd cx s k = bs |> { BNil BNo ; BCons b r (b |> { Br c ns y (ctorTy g c |> { MNone BNo ; MName tn (bCon tn BsNil s (bCase2 g x bs bd cx k tn)) }) }) }
+bCase2 g x bs bd cx k tn tc s = bInfer g x bd cx s (bCase3 g bs bd cx k tn tc)
+bCase3 g bs bd cx k tn tc st s = bUnify g tc st s (bCase4 g bs bd cx k tn)
+bCase4 g bs bd cx k tn s = bFresh s (bCase5 g bs bd cx k tn)
+bCase5 g bs bd cx k tn res s = bBranches g bs bd cx tn res s (bCase6 k res)
+bCase6 k res s = k res s
+bBranches g bs bd cx tn res s k = bs |> { BNil (k s) ; BCons b r (b |> { Br c ns y (tyFss (gDecls g) tn |> { MFsNone BNo ; MFs cs (ctorFs cs (tyFields (gDecls g) tn) c |> { MFsNone BNo ; MFs fs (eqN (lenN ns) (lenN fs) |> { No BNo ; Yes (bFields g fs s (bBr2 g ns y r bd cx tn res k)) }) }) }) }) }
+bBr2 g ns y r bd cx tn res k fts s = bInfer g y (bdAll ns fts bd) cx s (bBr3 g r bd cx tn res k)
+bBr3 g r bd cx tn res k bt s = bUnify g res bt s (bBr4 g r bd cx tn res k)
+bBr4 g r bd cx tn res k s = bBranches g r bd cx tn res s k
+bdAll ns ts bd = ns |> { NmNil bd ; NmCons n r (ts |> { BsNil bd ; BsCons t tr (bdAll r tr (BdCons n t bd)) }) }
+-- the declarations to infer: equations, definitions that are not
+-- quotations or namespace literals, and each core equation, keyed by its
+-- `core.eq`, its core's parameters first among its binders
+bItems ds = ds |> { DNil BiNil ; DCons d r (d |> { DEq n bs x (BiCons (BIt n n bs x BxTop) (bItems r)) ; DDef n x (isQuoteE x |> { Yes (bItems r) ; No (BiCons (BIt n n NmNil x BxTop) (bItems r)) }) ; DType n cs fs (bItems r) ; DMacro n ps c x (bItems r) ; DCore n ps es (bItemsC es (bItems r)) ; DCEq c n rn bs x (bItems r) }) }
+bItemsC es acc = es |> { DNil acc ; DCons d r (d |> { DCEq c n rn bs x (BiCons (BIt c n bs x (BxCore rn)) (bItemsC r acc)) ; DEq n bs x (bItemsC r acc) ; DDef n x (bItemsC r acc) ; DType n cs fs (bItemsC r acc) ; DMacro n ps c x (bItemsC r acc) ; DCore n ps fs (bItemsC r acc) }) }
+bItem its key = its |> { BiNil (BIt idNone idNone NmNil (EVar idNone) BxTop) ; BiCons i r (i |> { BIt k n bs x cx (eqId k key |> { Yes i ; No (bItem r key) }) }) }
+bKeys its = its |> { BiNil NmNil ; BiCons i r (i |> { BIt k n bs x cx (NmCons k (bKeys r)) }) }
+bTopKeys its = its |> { BiNil NmNil ; BiCons i r (i |> { BIt k n bs x cx (cx |> { BxTop (NmCons k (bTopKeys r)) ; BxCore rn (bTopKeys r) }) }) }
+-- an interpreter core's name denotes its loop: the cores with one, each
+-- with its loop's key
+bLoops g ss ds = ds |> { DNil RnNil ; DCons d r (d |> { DCore n ps es (andB (bHasObj g) (orB (orB (memN idGStep (ownNames es)) (memN idLoop (ownNames es))) (anyIn ss (ownNames es))) |> { Yes (loopOf es |> { MName c (RnCons n c (bLoops g ss r)) ; MNone (bLoops g ss r) }) ; No (bLoops g ss r) }) ; DEq n bs x (bLoops g ss r) ; DDef n x (bLoops g ss r) ; DType n cs fs (bLoops g ss r) ; DMacro n ps c x (bLoops g ss r) ; DCEq c n rn bs x (bLoops g ss r) }) }
+ownNames es = es |> { DNil NmNil ; DCons d r (d |> { DCEq c e rn bs x (NmCons e (ownNames r)) ; DEq n bs x (NmCons n (ownNames r)) ; DDef n x (ownNames r) ; DType n cs fs (ownNames r) ; DMacro n ps c x (ownNames r) ; DCore n ps fs (ownNames r) }) }
+bHasObj g = objOf (gDecls g) ObNone |> { Ob on cs fs apc Yes ; ObNone No ; ObErr No }
+-- the names a body mentions (typecheck.py _names), under lambdas too
+bNames e acc = e |> { EVar n (NmCons n acc) ; EApp p (p |> { EAp f a (bNames f (bNames a acc)) }) ; ECell xs (bNamesL xs acc) ; EPick k x (bNames x acc) ; ECase x bs (bNames x (bNamesB bs acc)) ; ELam x b (bNames b acc) ; EQuote b fu i acc ; EScry p acc ; ENs fs acc ; ENum k acc }
+bNamesL xs acc = xs |> { XNil acc ; XCons x r (bNames x (bNamesL r acc)) }
+bNamesB bs acc = bs |> { BNil acc ; BCons b r (b |> { Br c ns y (bNames y (bNamesB r acc)) }) }
+-- an item's dependencies: a sibling of its core by `core.eq`, a
+-- program-level item, or a core's loop
+bDeps tk ls bs cx ns = ns |> { NmNil NmNil ; NmCons n r (memN n bs |> { Yes (bDeps tk ls bs cx r) ; No (bDep tk ls cx n (bDeps tk ls bs cx r)) }) }
+bDep tk ls cx n acc = (cx |> { BxTop MNone ; BxCore rn (rnFind n rn) }) |> { MName c (NmCons c acc) ; MNone (memN n tk |> { Yes (NmCons n acc) ; No (rnFind n ls |> { MName c (NmCons c acc) ; MNone acc }) }) }
+-- names in Python's order, by their texts
+insName rv x xs = xs |> { NmNil (NmCons x NmNil) ; NmCons y r (cmpName (nameFor rv x) (nameFor rv y) |> { CLt (NmCons x xs) ; CEq (NmCons x xs) ; CGt (NmCons y (insName rv x r)) }) }
+sortNames rv xs = xs |> { NmNil NmNil ; NmCons x r (insName rv x (sortNames rv r)) }
+nubN xs = xs |> { NmNil NmNil ; NmCons x r (memN x r |> { Yes (nubN r) ; No (NmCons x (nubN r)) }) }
+-- the groups (typecheck.py _sccs): Tarjan over the keys and each key's
+-- dependencies in order, callees first, each group as Python pops it
+bEqxs rv its ks tk ls = ks |> { NmNil ExNil ; NmCons k r (bItem its k |> { BIt k2 n bs x cx (ExCons (EqX k NmNil DBad (sortNames rv (nubN (bDeps tk ls bs cx (bNames x NmNil))))) (bEqxs rv its r tk ls)) }) }
+revN xs acc = xs |> { NmNil acc ; NmCons x r (revN r (NmCons x acc)) }
+revSc xs acc = xs |> { ScNil acc ; ScCons g r (revSc r (ScCons (revN g NmNil) acc)) }
+bGroups rv its ls = bGroups2 (bEqxs rv its (sortNames rv (bKeys its)) (bTopKeys its) ls)
+bGroups2 es = tarjan es (Tst Zero NmNil (tjInit es Tj0) ScNil) |> { Tst c stk m out (revSc out ScNil) }
+
+-- a group (typecheck.py infer_group): each key a monotype; each item's
+-- binders fresh, a repeated one taking the last; EQ's first two data; its
+-- type unified with its monotype; then its literals settled, its
+-- monotypes dropped and each type generalized
+bGroup g its ls grp s k = bMonoAll grp s (bGroup2 g its ls grp k)
+bMonoAll ks s k = ks |> { NmNil (k (bsLitsSet s BsNil)) ; NmCons c r (bFresh s (bMonoK c r k)) }
+bMonoK c r k t s = bMonoAll r (bsMonoPut s c t) k
+bGroup2 g its ls grp k s = bItemsT g its grp Bm0 s (bGroup3 g its ls grp k)
+bItemsT g its ks rs s k = ks |> { NmNil (k rs s) ; NmCons c r (bItem its c |> { BIt c2 n bs x cx (bBinders bs BdNil s (bItemT g c n bs x cx (bItemsTK g its r rs k))) }) }
+bItemsTK g its r rs k c t s = bItemsT g its r (bmPut (idBits c) (MBt t) rs) s k
+bBinders bs bd s k = bs |> { NmNil (k bd s) ; NmCons b r (bFresh s (bBindersK b r bd k)) }
+bBindersK b r bd k t s = bBinders r (BdCons b t bd) s k
+bParams bs bd = bs |> { NmNil BsNil ; NmCons b r (BsCons (bdGet b bd |> { MBt t t ; MBtNone Bn }) (bParams r bd)) }
+bItemT g c n bs x cx k bd s = bReqEq g (andB (cx |> { BxTop Yes ; BxCore rn No }) (eqId n idEQ) |> { Yes (bTake2 (bParams bs bd)) ; No BsNil }) s (bItemT2 g c bs x cx k bd)
+bTake2 xs = xs |> { BsNil BsNil ; BsCons a r (r |> { BsNil (bs1 a) ; BsCons b r2 (bs2 a b) }) }
+bReqEq g ts s k = ts |> { BsNil (k s) ; BsCons t r (bReqData g t BsNil s (bReqEqK g r k)) }
+bReqEqK g r k sn s = bReqEq g r s k
+bItemT2 g c bs x cx k bd s = bInfer g x bd cx s (bItemT3 g c bs k bd)
+bItemT3 g c bs k bd bt s = bArrows (bParams bs bd) bt s (bItemT4 g c k)
+bItemT4 g c k t s = bsMono s c |> { MBt m (bUnify g m t s (bItemT5 c t k)) ; MBtNone BNo }
+bItemT5 c t k s = k c t s
+bGroup3 g its ls grp k rs s = bSettle g (revB (bsLits s) BsNil) (bsLitsSet s BsNil) (bGroup4 g its ls grp k rs)
+bGroup4 g its ls grp k rs s = bGen g its grp rs (bMonoDel grp s) (bGroup5 ls grp k)
+bMonoDel ks s = ks |> { NmNil s ; NmCons c r (bMonoDel r (bsMonoDel s c)) }
+bGen g its ks rs s k = ks |> { NmNil (k s) ; NmCons c r (bmGet (idBits c) rs |> { MBtNone (bGen g its r rs s k) ; MBt t (bGen g its r rs (bGenPut its c (bGeneral t s) s) k) }) }
+-- a program-level item's scheme goes to the program's environment, a
+-- core equation's to the cores', by its `core.eq`
+bGenPut its c sc s = bItem its c |> { BIt k n bs x cx (cx |> { BxTop (bsEnvPut s c sc) ; BxCore rn (bsCEnvPut s c sc) }) }
+-- once a core's loop is typed, the core's name denotes it
+bGroup5 ls grp k s = k (bAlias ls grp s)
+bAlias ls grp s = ls |> { RnNil s ; RnCons n c r (bAlias r grp (memN c grp |> { Yes (bsCEnv s c |> { MSc sc (bsEnvPut s n sc) ; MScNone s }) ; No s })) }
+-- the literals: a numeral of a numeral type, or defaulted to the one
+-- declared, or to fuel when none is; two declared is a problem
+bSettle g lits s k = lits |> { BsNil (k s) ; BsCons t r (bSettle1 g (bRes s t) r s k) }
+bSettle1 g t r s k = bsNode s t |> { TNV lr d n e (bSettle2 g t r s k) ; TNC x as (isNumeral g x |> { Yes (bSettle g r s k) ; No BNo }) ; TNA p q el nm dt ck nu (bSettle2 g t r s k) }
+bSettle2 g t r s k = (gNums g |> { NmNil (MName idFuel) ; NmCons a rest (rest |> { NmNil (MName a) ; NmCons b rr MNone }) }) |> { MName a (bCon a BsNil s (bSettle3 g t r k)) ; MNone BNo }
+bSettle3 g t r k c s = bUnify g t c s (bSettle4 g r k)
+bSettle4 g r k s = bSettle g r s k
+-- the constructors' schemes: their fields' types to their type's
+bCtors g ds s k = ds |> { DNil (k s) ; DCons d r (d |> { DType n cs fs (bCtorsT g n cs fs s (bCtorsK g r k)) ; DEq m bs x (bCtors g r s k) ; DDef m x (bCtors g r s k) ; DMacro m ps c x (bCtors g r s k) ; DCore m ps es (bCtors g r s k) ; DCEq c m rn bs x (bCtors g r s k) }) }
+bCtorsK g r k s = bCtors g r s k
+bCtorsT g tn cs fs s k = cs |> { NmNil (k s) ; NmCons c cr (fs |> { FsNil (k s) ; FsCons f fr (bFields g f s (bCtorsT2 g tn c cr fr k)) }) }
+bCtorsT2 g tn c cr fr k ts s = bCon tn BsNil s (bCtorsT3 g tn c cr fr k ts)
+bCtorsT3 g tn c cr fr k ts tc s = bArrows ts tc s (bCtorsT4 g tn c cr fr k)
+bCtorsT4 g tn c cr fr k t s = bCtorsT g tn cr fr (bsEnvPut s c (Sch BsNil BsNil t BsNil ElNil)) k
+-- datums are the object type's terms, a namespace literal a function of
+-- one to the answer type's; each level-1 run noted
+bDatums ot an ds s k = ds |> { DNil (k s) ; DCons d r (d |> { DDef n x (x |> { EQuote b fu i (isDatum fu i |> { Yes (bDatums ot an r (bsEnvPut s n (Sch BsNil BsNil ot BsNil ElNil)) k) ; No (bDatums ot an r s k) }) ; ENs fs (an |> { MName a (bCon a BsNil s (bDatumsNs ot an n r k)) ; MNone (bDatums ot an r s k) }) ; EVar m (bDatums ot an r s k) ; EApp p (bDatums ot an r s k) ; ECell xs (bDatums ot an r s k) ; EPick m y (bDatums ot an r s k) ; ECase y bs (bDatums ot an r s k) ; ELam y b (bDatums ot an r s k) ; EScry p (bDatums ot an r s k) ; ENum m (bDatums ot an r s k) }) ; DEq n bs x (bDatums ot an r s k) ; DType n cs fs (bDatums ot an r s k) ; DMacro n ps c x (bDatums ot an r s k) ; DCore n ps es (bDatums ot an r s k) ; DCEq c n rn bs x (bDatums ot an r s k) }) }
+bDatumsNs ot an n r k ta s = bArr ot ta No MNone s (bDatumsNs2 ot an n r k)
+bDatumsNs2 ot an n r k t s = bDatums ot an r (bsEnvPut s n (Sch BsNil BsNil t BsNil ElNil)) k
+-- the answer type, if there is exactly one with a nullary constructor
+bAnswer on o2 r2 ds = ansCands on o2 r2 ds |> { NmNil MNone ; NmCons a r (r |> { NmNil (eqId a idNone |> { Yes MNone ; No (MName a) }) ; NmCons b r2x MNone }) }
+-- signatures: each one of a program-level name, against its scheme
+bSigs g sg s k = sg |> { SgNil (k s) ; SgCons n ts r (bsEnv s n |> { MScNone (bSigs g r s k) ; MSc sc (bFields g (initN ts) s (bSigs2 g n ts r k sc)) }) }
+bSigs2 g n ts r k sc as s = bField g (lastN ts idNone) s (bSigs3 g r k sc as)
+bSigs3 g r k sc as t s = bArrows as t s (bSigs4 g r k sc)
+bSigs4 g r k sc sig s = bInst g sc s (bSigs5 g r k sig)
+bSigs5 g r k sig it s = bUnify g sig it s (bSigs6 g r k)
+bSigs6 g r k s = bSigs g r s k
+-- the level-1 runs (typecheck.py run_decl): the interpreter, whnfF by
+-- default, applied to its parameters, then the fuel and the term, to the
+-- result type; each run is then of that type
+bRuns g ms ot rn ds s k = ds |> { DNil (k s) ; DCons d r (d |> { DDef n x (x |> { EQuote b fu i (isDatum fu i |> { Yes (bRuns g ms ot rn r s k) ; No (bRun g ms ot rn n (i |> { INone (EVar idWhnfF) ; ISome y y }) (bsLitsSet s BsNil) (bRunsK g ms ot rn r k)) }) ; EVar m (bRuns g ms ot rn r s k) ; EApp p (bRuns g ms ot rn r s k) ; ECell xs (bRuns g ms ot rn r s k) ; EPick m y (bRuns g ms ot rn r s k) ; ECase y bs (bRuns g ms ot rn r s k) ; ELam y b (bRuns g ms ot rn r s k) ; EScry p (bRuns g ms ot rn r s k) ; ENs fs (bRuns g ms ot rn r s k) ; ENum m (bRuns g ms ot rn r s k) }) ; DEq n bs x (bRuns g ms ot rn r s k) ; DType n cs fs (bRuns g ms ot rn r s k) ; DMacro n ps c x (bRuns g ms ot rn r s k) ; DCore n ps es (bRuns g ms ot rn r s k) ; DCEq c n rn2 bs x (bRuns g ms ot rn r s k) }) }
+bRunsK g ms ot rn r k s = bSettle g (revB (bsLits s) BsNil) (bsLitsSet s BsNil) (bRunsK2 g ms ot rn r k)
+bRunsK2 g ms ot rn r k s = bRuns g ms ot rn r s k
+bRun g ms ot rn n hd s k = aSpine hd XNil |> { Spn h as (h |> { EVar m (bsEnv s m |> { MScNone (k s) ; MSc sc (bInst g sc s (bRunArgs g ms ot rn n as k)) }) ; EApp p (k s) ; ECell xs (k s) ; EPick j y (k s) ; ECase y bs (k s) ; ELam y b (k s) ; EQuote b fu i (k s) ; EScry p (k s) ; ENs fs (k s) ; ENum j (k s) }) }
+bRunArgs g ms ot rn n as k t s = as |> { XNil (bFresh s (bRunEnd g ot rn n k t)) ; XCons x r (mxTop ms x |> { MXFail BNo ; MX e w f (bInfer g e BdNil BxTop s (bRunArg2 g ms ot rn n r k t)) }) }
+bRunArg2 g ms ot rn n r k t tx s = bFresh s (bRunArg3 g ms ot rn n r k t tx)
+bRunArg3 g ms ot rn n r k t tx rv s = bArr tx rv Yes MNone s (bRunArg4 g ms ot rn n r k t rv)
+bRunArg4 g ms ot rn n r k t rv ar s = bUnify g ar t s (bRunArgs g ms ot rn n r k rv)
+bRunEnd g ot rn n k t rv s = bArrows (bs2 (gFuel g) ot) rv s (bRunEnd2 g rn n k t rv)
+bRunEnd2 g rn n k t rv ar s = bUnify g ar t s (bRunEnd3 g rn n k rv)
+bRunEnd3 g rn n k rv s = bCon rn BsNil s (bRunEnd4 g rn n k rv)
+bRunEnd4 g rn n k rv tr s = bUnify g tr rv s (bRunEnd5 rn n k)
+bRunEnd5 rn n k s = bCon rn BsNil s (bRunEnd6 n k)
+bRunEnd6 n k tr s = k (bsEnvPut s n (Sch BsNil BsNil tr BsNil ElNil))
+-- the run's arguments expanded before Stage B: Python expands them
+-- inside it, and an expansion that fails refuses the program whatever
+-- else Stage B finds.  An interpreter is a core (Stage A), and Python
+-- reaches its arguments when the core denotes its loop
+bArgsOK ms ls ds = ds |> { DNil Yes ; DCons d r (andB (d |> { DDef n x (x |> { EQuote b fu i (i |> { INone Yes ; ISome y (aSpine y XNil |> { Spn h as (h |> { EVar m (rnFind m ls |> { MName c (bArgsX ms as) ; MNone Yes }) ; EApp p Yes ; ECell xs Yes ; EPick j z Yes ; ECase z bs Yes ; ELam z b Yes ; EQuote b2 f2 i2 Yes ; EScry p Yes ; ENs fs Yes ; ENum j Yes }) }) }) ; EVar m Yes ; EApp p Yes ; ECell xs Yes ; EPick m y Yes ; ECase y bs Yes ; ELam y b Yes ; EScry p Yes ; ENs fs Yes ; ENum m Yes }) ; DEq n bs x Yes ; DType n cs fs Yes ; DMacro n ps c x Yes ; DCore n ps es Yes ; DCEq c n rn bs x Yes }) (bArgsOK ms ls r)) }
+bArgsX ms as = as |> { XNil Yes ; XCons x r (mxTop ms x |> { MXFail No ; MX e w f (bArgsX ms r) }) }
+-- Stage B from the top (typecheck.py run): the FUEL node first; the
+-- constructors; the object, loop and answer types; the datums; the
+-- groups; the signatures; the runs.  BOk where it finds no problem
+stageB st ms ct ds sg ss = st |> { Ist tab rv nx (bCon idFuel BsNil (BS Nd0 Bn Ev0 Ev0 Bm0 BsNil) (stageB2 rv ms ct ds sg ss)) }
+stageB2 rv ms ct ds sg ss fu s = stageB3 (BGx ds fu ct (numTys ds) rv) ms ds sg ss s
+stageB3 g ms ds sg ss s = bCtors g ds s (stageB4 g ms ds sg ss)
+stageB4 g ms ds sg ss s = bObjNode ds s (stageB5 g ms ds sg ss (bAnsOf ds) (bRtOf ds))
+-- the object type's node, made once, if there is one; its loop's result
+-- type and the answer type, as names
+bObjNode ds s k = objOf ds ObNone |> { Ob on cs fs apc (bCon on BsNil s (bObjK k)) ; ObNone (k MBtNone s) ; ObErr (k MBtNone s) }
+bObjK k t s = k (MBt t) s
+bRtOf ds = objOf ds ObNone |> { Ob on cs fs apc (pickOR (candsOf on ds) |> { LT sd dn val to ks o2 r2 (MName r2) ; LTErr MNone }) ; ObNone MNone ; ObErr MNone }
+bAnsOf ds = objOf ds ObNone |> { Ob on cs fs apc (pickOR (candsOf on ds) |> { LT sd dn val to ks o2 r2 (bAnswer on o2 r2 ds) ; LTErr MNone }) ; ObNone MNone ; ObErr MNone }
+stageB5 g ms ds sg ss an rt mot s = bDatumsM mot an ds s (stageB6 g ms ds sg ss an rt (mot |> { MBt t t ; MBtNone Bn }))
+bDatumsM mot an ds s k = mot |> { MBt ot (bDatums ot an ds s k) ; MBtNone (k s) }
+stageB6 g ms ds sg ss an rt ot s = stageB7 g ms ds sg (bItems ds) (bLoops g ss ds) rt ot s
+stageB7 g ms ds sg its ls rt ot s = bGroupsAll g its ls (bGroups (gRv g) its ls) s (stageB8 g ms ds sg ls rt ot)
+bGroupsAll g its ls gs s k = gs |> { ScNil (k s) ; ScCons grp r (bGroup g its ls grp s (bGroupsK g its ls r k)) }
+bGroupsK g its ls r k s = bGroupsAll g its ls r s k
+stageB8 g ms ds sg ls rt ot s = bSigs g sg s (stageB9 g ms ds ls rt ot)
+stageB9 g ms ds ls rt ot s = rt |> { MName rn (bRuns g ms ot rn ds s stageBEnd) ; MNone (stageBEnd s) }
+stageBEnd s = BOk
 -- the front end: characters to every name's term
 front s = frontA (intern (lx s) seeded)
 frontA q = q |> { IR raw st (front2 st raw) }
@@ -1105,9 +1595,12 @@ front2 st raw = cc TNl raw |> { CRFail (RErr Zero) ; CR is ys (dupS (ciNames is)
 -- pass one refuses a constructor declared twice (parser.py collect_ctors)
 ciNames is = is |> { CiNil NmNil ; CiCons x r (x |> { CInfo n tn i k (NmCons n (ciNames r)) }) }
 front2b st ct ys raw = front3 st ct ys (pprog ct (nlf TNl TNl Zero BkNil raw))
-front3 st ct ys p = p |> { PDFail (RErr Zero) ; PD ds0 (stageA st ct ys ds0 |> { PANo (genProg ds0 st |> { GQErr (RErr Zero) ; GQ ds1 st1 (front3x st1 ct ys ds0 ds1) }) ; PAIs c (RErr c) }) }
-front3x st ct ys ds0 ds1 = xpand (macsOf ds1 McNil) ds1 |> { PDFail (RErr Zero) ; PD ds (orB (skiD ds) (orB (dupS (orderOf ds) Ns0) (orB (dupS (tyNames ys) Ns0) (orB (dupS (coreNames ds) Ns0) (dupEqs ds)))) |> { Yes (RErr Zero) ; No (front3b (macsOf ds1 McNil) ct ys (natOps ds0) (coreIds st ds)) }) }
-front3b ms ct ys nops q = q |> { CQ ds st (qstrip (pathSx ct st ds) (objOf ds ObNone |> { Ob on cs fs apc (memN idScry (leavesOf apc cs)) ; ObNone No ; ObErr No }) ds Bn |> { QStFail (RErr Zero) ; QSt qd qc (st |> { Ist tab rv nx (front4 rv ms ct ys ds nops qd (orderOf ds)) }) }) }
+front3 st ct ys p = p |> { PQFail (RErr Zero) ; PQ ds0 sg (stageA st ct ys ds0 |> { PANo (genProg ds0 st |> { GQErr (RErr Zero) ; GQ ds1 st1 (front3x st1 ct ys ds0 ds1 sg) }) ; PAIs c (RErr c) }) }
+front3x st ct ys ds0 ds1 sg = xpand (macsOf ds1 McNil) ds1 |> { PDFail (RErr Zero) ; PD ds (orB (skiD ds) (orB (dupS (orderOf ds) Ns0) (orB (dupS (tyNames ys) Ns0) (orB (dupS (coreNames ds) Ns0) (dupEqs ds)))) |> { Yes (RErr Zero) ; No (front3b (macsOf ds1 McNil) ct ys (natOps ds0) (coreIds st ds) sg) }) }
+front3b ms ct ys nops q sg = q |> { CQ ds st (front3s ms ct ys nops ds st sg (objOf ds ObNone |> { Ob on cs fs apc (lookPre nameGStep cs st |> { NQ ss st2 ss }) ; ObNone NmNil ; ObErr NmNil })) }
+-- the runs' arguments expanded, then Stage B
+front3s ms ct ys nops ds st sg ss = bArgsOK ms (bLoops (BGx ds Bn Cm0 NmNil Rv0) ss ds) ds |> { No (RErr Zero) ; Yes (stageB st ms ct ds sg ss |> { BNo (RErr (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))) ; BOk (front3c ms ct ys nops ds st) }) }
+front3c ms ct ys nops ds st = (qstrip (pathSx ct st ds) (objOf ds ObNone |> { Ob on cs fs apc (memN idScry (leavesOf apc cs)) ; ObNone No ; ObErr No }) ds Bn |> { QStFail (RErr Zero) ; QSt qd qc (st |> { Ist tab rv nx (front4 rv ms ct ys ds nops qd (orderOf ds)) }) })
 front4 rv ms ct ys ds nops qd o = front4a rv ms ct ys ds nops qd (appN o (prelNotIn (setOf o Ns0) (appN preludeNames nops)))
 front4a rv ms ct ys ds nops qd env = front5 rv ms ct ys ds nops qd env (loops ds) (loopAlias (setOf (memN idNatMul nops |> { Yes (NmCons idNatAdd env) ; No env }) Ns0) (loops ds))
 front5 rv ms ct ys ds nops qd env ls al = front5a rv ms ct ys ds nops qd env ls al (setOf (appN (notIn (l1Names qd) env) (appN (cidsOf ds) (rnKeys al))) Ns0) (eqsOf ct ys ds)

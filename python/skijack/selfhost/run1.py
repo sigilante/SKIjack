@@ -52,12 +52,13 @@ from aviary_kernel.terms import Atom
 
 import skijack
 from skijack import parse
-from skijack.check import check_program
+from skijack.check import check_program, isa_binders
 from skijack.dictionary import structural_hash
-from skijack.expand import program_prelude
+from skijack.expand import _generate, program_prelude
 from skijack.errors import SkijackError
 from skijack.export import jam
 from skijack.templates import templates, write as write_templates, write_words
+from skijack.typecheck import _UNSETTLED, typecheck_program
 
 from .run0 import Deep, EDGES, TERMS, _H
 
@@ -674,7 +675,12 @@ EDGES5: Dict[str, str] = {k: v[1] for k, v in STAGEA.items()}
 #: a refusal's class, as front1 numbers it (its `result` type): 0 where the
 #: parser or the expander refuses, else Stage A's first problem's
 CLASSES = ("refused", "ScopeError", "ArityError", "CaseError", "DataError",
-           "InterfaceError", "SymbolTableError")
+           "InterfaceError", "SymbolTableError", "TypeMismatchError")
+
+#: what the reference cannot witness: Stage B refusing for the host's
+#: recursion limit, or the reference failing outside its rules.  front1
+#: must agree only where both witness, and may accept such a program
+UNWITNESSED = -1
 
 #: a name to its term's hash, or a refusal's class
 Result = Union[Dict[str, str], int]
@@ -727,19 +733,40 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
 
 
 def reference(text: str) -> Result:
-    """Stage A's first problem's class over the parsed program, as the
-    expander checks before it expands; else the expander's terms with
-    checking off, hashed, or 0 if it refuses.  Every refusal is a
-    SkijackError, the host's included (an alias of itself), and a binder
-    named S, K or I is refused by name."""
+    """As the expander checks before it expands: Stage A's first problem's
+    class over the parsed program; then a binder named S, K or I and
+    generation, 0 if they refuse; then Stage B over the generated program,
+    TypeMismatchError for any problem, or UNWITNESSED where it could not
+    settle a type within the host's recursion limit; else the expander's
+    terms with checking off, hashed, or 0 if it refuses.  Every refusal is
+    a SkijackError, the host's included (an alias of itself)."""
     try:
         with Deep():
             program = parse(text, "ascii")
-            problems = check_program(program, program_prelude(program))
+            prelude = program_prelude(program)
+            problems = check_program(program, prelude)
     except SkijackError:
         return 0
     if problems:
         return CLASSES.index(problems[0].kind.__name__)
+    try:
+        with Deep():
+            if isa_binders(program):
+                return 0
+            generated = _generate(program)
+    except SkijackError:
+        return 0
+    try:
+        with Deep():
+            typed = typecheck_program(generated, prelude, generated=True)
+    except SkijackError:
+        return 0                    # a macro's expansion, inside Stage B
+    except Exception:               # RecursionError, or a failure outside the rules
+        return UNWITNESSED
+    if any(p.message == _UNSETTLED for p in typed):
+        return UNWITNESSED
+    if typed:
+        return CLASSES.index("TypeMismatchError")
     try:
         with Deep():
             e = skijack.compile(text, lexicon="ascii", check=False)
@@ -764,7 +791,10 @@ def _closed(t) -> bool:
 
 
 def compare(got: Result, ref: Result) -> str:
-    """'' if front1 did what the reference did, else what differs."""
+    """'' if front1 did what the reference did, else what differs; ''
+    where the reference cannot witness."""
+    if ref == UNWITNESSED:
+        return ""
     if isinstance(got, int) or isinstance(ref, int):
         if got == ref:
             return ""
