@@ -238,7 +238,7 @@ def write(ts: List[Template], templates_path, terms_path) -> Tuple[int, int]:
     rows = []
     for h in sorted(terms):
         term = terms[h]
-        rows.append(f"{h}\t{_atoms(term)}\t{pretty(term)}\n")
+        rows.append(f"{h}\t{_atoms(term)}\t{dag_text(term)}\n")
     terms_path.write_text("".join(rows))
     return len(lines), len(rows)
 
@@ -271,11 +271,44 @@ def write_words(exp, path) -> int:
 
 
 def _atoms(t: Term) -> int:
-    n, stack = 0, [t]
+    """The leaves of ``t``'s tree, counted over its graph."""
+    count: Dict[int, int] = {}
+    stack = [(t, False)]
     while stack:
-        x = stack.pop()
-        if isinstance(x, App):
-            stack += [x.fn, x.arg]
+        x, done = stack.pop()
+        if id(x) in count:
+            continue
+        if not isinstance(x, App):
+            count[id(x)] = 1
+        elif done:
+            count[id(x)] = count[id(x.fn)] + count[id(x.arg)]
         else:
-            n += 1
-    return n
+            stack += [(x, True), (x.fn, False), (x.arg, False)]
+    return count[id(t)]
+
+
+def dag_text(t: Term) -> str:
+    """``t`` in Avon's DAG form, `dag <id>=<rhs> ... @<root>`, each shared
+    node once: a referenced term of a large program unfolds to a tree many
+    times its graph, which the printed form would spell out.  Avon reads
+    it (``av_parse_dag``) to the same term."""
+    ids: Dict[int, int] = {}
+    keep: List[Term] = []           # pins the nodes, so no id() is reused
+    parts = ["dag"]
+    stack = [(t, False)]
+    while stack:
+        x, done = stack.pop()
+        if id(x) in ids:
+            continue
+        if isinstance(x, App):
+            if not done:
+                stack += [(x, True), (x.arg, False), (x.fn, False)]
+                continue
+            rhs = f"{ids[id(x.fn)]}.{ids[id(x.arg)]}"
+        else:
+            rhs = x.name
+        ids[id(x)] = len(ids)
+        keep.append(x)
+        parts.append(f"{ids[id(x)]}={rhs}")
+    parts.append(f"@{ids[id(t)]}")
+    return " ".join(parts)
