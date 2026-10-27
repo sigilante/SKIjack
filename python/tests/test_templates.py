@@ -134,13 +134,30 @@ def _printed(text):
     return t
 
 
+def _dag(text):
+    """The DAG form: `dag <id>=<rhs> ... @<root>`, each id once."""
+    nodes = {}
+    words = text.split()
+    assert words[0] == "dag"
+    for w in words[1:]:
+        if w.startswith("@"):
+            return nodes[int(w[1:])]
+        i, rhs = w.split("=", 1)
+        if rhs[:1].isdigit():
+            l, r = rhs.split(".")
+            nodes[int(i)] = App(nodes[int(l)], nodes[int(r)])
+        else:
+            nodes[int(i)] = Atom(rhs)
+    raise AssertionError("a DAG with no root")
+
+
 def _read_back(tdir):
     """The files parsed the way a runtime reads them: each body rebuilt with
     its references resolved through template_terms.tsv."""
     terms = {}
     for line in (tdir / "template_terms.tsv").read_text().splitlines():
         h, _atoms, text = line.split("\t")
-        terms[h] = _printed(text)
+        terms[h] = _dag(text) if text.startswith("dag ") else _printed(text)
     out = []
     for line in (tdir / "templates.tsv").read_text().splitlines():
         key, kind, label, k, formals, body = line.split("\t")
