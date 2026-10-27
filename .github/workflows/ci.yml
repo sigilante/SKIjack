@@ -52,12 +52,13 @@ jobs:
 
   # Every reduction the suite makes, run by Avon and by aviary and compared
   # (SKIJACK_REDUCER=check), with the front-end tests, which need Avon too.
-  # Avon is built at a pinned commit, one with `batch --dag`.
+  # Avon is built at a pinned commit, one whose front0 reads a refusal's
+  # class, as front1's M5 gives it.
   avon:
     name: pytest, every reduction checked against Avon
     runs-on: ubuntu-24.04
     env:
-      AVON_REF: 65ae1a5b24d9813566cfd2eb38f8c01707da8259   # sigilante/avon #60, batch --dag
+      AVON_REF: 3eceadc99860e8eb81bf5d5ff948ef92fc00afc0   # sigilante/avon #80, RErr n
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
