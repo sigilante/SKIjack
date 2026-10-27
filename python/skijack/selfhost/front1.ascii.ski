@@ -1336,22 +1336,21 @@ bFreeQ q r s = r |> { FV o sn (bFree q o sn s) }
 bFreeL as out sn s = as |> { BsNil (FV out sn) ; BsCons a r (bFreeL2 r (bFree a out sn s) s) }
 bFreeL2 r v s = v |> { FV o sn (bFreeL r o sn s) }
 fvOut v = v |> { FV o sn o }
--- the environment's free variables: each program-level scheme's past its
--- quantified ones, and the group's monotypes' (typecheck.py env_free)
-evFree ev s acc = ev |> { Ev0 acc ; EvT t (t |> { EvB v z o (evFree o s (evFree z s (v |> { MScNone acc ; MSc sc (sc |> { Sch vs ds u ns els (schFree vs (fvOut (bFree u BsNil BsNil s)) acc) }) }))) }) }
-schFree vs fv acc = fv |> { BsNil acc ; BsCons x r (schFree vs r (memB x vs |> { Yes acc ; No (addB x acc) })) }
-moFree mo s acc = mo |> { Bm0 acc ; BmT t (t |> { BmB v z o (moFree o s (moFree z s (v |> { MBtNone acc ; MBt x (fvOut (bFree x acc BsNil s)) }))) }) }
-bEnvFree s = s |> { BS m nx ev ce mo li (moFree mo s (evFree ev s BsNil)) }
-minusB a b = a |> { BsNil BsNil ; BsCons x r (memB x b |> { Yes (minusB r b) ; No (BsCons x (minusB r b)) }) }
 isDataV s v = bsNode s v |> { TNV r d n e d ; TNC x y No ; TNA p q el nm dt ck nu No }
 isNumV s v = bsNode s v |> { TNV r d n e n ; TNC x y No ; TNA p q el nm dt ck nu No }
 filtData s qs = qs |> { BsNil BsNil ; BsCons x r (isDataV s x |> { Yes (BsCons x (filtData s r)) ; No (filtData s r) }) }
 filtNum s qs = qs |> { BsNil BsNil ; BsCons x r (isNumV s x |> { Yes (BsCons x (filtNum s r)) ; No (filtNum s r) }) }
 elsOf s qs = qs |> { BsNil ElNil ; BsCons x r (bsNode s x |> { TNV lr d n e (e |> { LkNone (elsOf s r) ; LkTo y (ElCons x y (elsOf s r)) }) ; TNC y z (elsOf s r) ; TNA p q el nm dt ck nu (elsOf s r) }) }
 bSchOf t qs s = Sch qs (filtData s qs) t (filtNum s qs) (elsOf s qs)
--- generalize: past the environment's; close: every free variable
-bGeneral t s = bSchOf t (sortB (minusB (fvOut (bFree t BsNil BsNil s)) (bEnvFree s))) s
+-- close: every free variable quantified.  generalize (typecheck.py) is
+-- the same here: it quantifies all but the environment's free variables,
+-- and those are always none.  Every program-level scheme is closed: a
+-- constructor's, a datum's and a run's hold no variable, a core's loop is
+-- a core's closed scheme, and generalize, the environment having none,
+-- quantifies all; the group's monotypes are dropped before it runs; and
+-- a scheme's type is only ever instantiated, a copy, so it stays closed
 bClosed t s = bSchOf t (sortB (fvOut (bFree t BsNil BsNil s))) s
+bGeneral t s = bClosed t s
 -- the builtins (typecheck.py builtin), each built afresh and closed; k
 -- takes the scheme, or none
 bBuiltin g n s k = isSKI n |> { Yes (bBuiltinSKI g n s k) ; No (memN n (NmCons idB (NmCons idC (NmCons idW (NmCons idY NmNil)))) |> { Yes (bBuiltinBird g n s k) ; No (bBuiltinP g n s k) }) }

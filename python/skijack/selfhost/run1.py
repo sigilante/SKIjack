@@ -556,7 +556,9 @@ def _program2(rng: random.Random) -> str:
 
 #: M5's edges: each of Stage A's checks (check.py), passed and failed, and
 #: the order of the first problem among them; each with the class the
-#: reference gives it, None where it accepts
+#: reference gives it, None where it accepts.  Four Stage A passes are
+#: Stage B's to refuse: a name unresolved in a macro body, and programs
+#: whose types do not meet
 STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     # (f) scope: names resolve, or not
     "an unresolved name": ("ScopeError", _H + "f := y\n"),
@@ -565,18 +567,18 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a branch's binder": (None, _H + "f n = n |> { Zero Zero ; Suc k k }\n"),
     "a type's name as a value": ("ScopeError", _H + "f := nat\n"),
     "a macro's name": (None, _H + "m x :=* x\nf := m Zero\n"),
-    "the prelude's names": (None, _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
+    "the prelude's names": ("TypeMismatchError", _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
     # the prelude's later names are known to Stage A; front1 does not yet
     # install them (WORKLIST), so a case error after them tells the two apart
     "natDiv and listLength known": ("CaseError", _H + "f := natDiv (natRem Zero Zero) (listLength nil)\ng n = n |> { Zero Zero }\n"),
     "a core's sibling and parameter": (None, _H + "c p := {\n  a x = b p\n  b y = y\n}\n"),
     "a core's sibling outside it": ("ScopeError", _H + "c := {\n  a x = x\n}\nf := a\n"),
     "generated names known": (None, _T + _M + _C + "f := sp\ng := resK\nh := stepI\n"),
-    "a core's generated step known": (None, _T + _M + "c := {\n  stepK args = loop\n}\n"),
+    "a core's generated step known": ("TypeMismatchError", _T + _M + "c := {\n  stepK args = loop\n}\n"),
     "loop1 unknown when loop is written": ("ScopeError", _T + _M + "c := {\n  loop f t = loop1\n}\n"),
     "a name unresolved in a macro body": (None, _H + "m x :=* y\nf := Zero\n"),
     "a qualified name": ("ScopeError", _H + "f := a.b\n"),
-    "a qualified name in a macro body": ("refused", _H + "m x :=* a.b\nf := m Zero\n"),
+    "a qualified name in a macro body": ("TypeMismatchError", _H + "m x :=* a.b\nf := m Zero\n"),
     "a qualified name quoted": ("SymbolTableError", _Q + "d := <a.b>\n"),
     # declared twice
     "an equation twice": ("ScopeError", _H + "f x = x\nf y = y\n"),
@@ -655,7 +657,7 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a step short of a leaf": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK\n}\n"),
     "a step out of order": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepK stepS stepI\n}\n"),
     "a step with its own leaf step": (None, _T + _M + "c := {\n  step m = sp m nil stepS stepK (stepI)\n}\n"),
-    "a step not the walker": (None, _T + _M + "c := {\n  step m = m\n}\n"),
+    "a step not the walker": ("TypeMismatchError", _T + _M + "c := {\n  step m = m\n}\n"),
     "a loop of one binder": ("InterfaceError", _T + _M + "c := {\n  loop f = f\n}\n"),
     "loop1 without loop": ("InterfaceError", _T + _M + "c := {\n  step m = sp m nil stepS stepK stepI\n  loop1 l t f = t\n}\n"),
     "a loop1 of two binders": ("InterfaceError", _T + _M + "c := {\n  loop f t = t\n  loop1 l t = t\n}\n"),
@@ -670,6 +672,70 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
 }
 
 EDGES5: Dict[str, str] = {k: v[1] for k, v in STAGEA.items()}
+
+_TM = "TypeMismatchError"
+#: M6's edges: Stage B's rules (typecheck.py), held and broken, each with
+#: the class the reference gives it, None where it accepts
+STAGEB: Dict[str, Tuple[Optional[str], str]] = {
+    # application, datums and functions
+    "a constructor applied to its field": (None, _H + "f := Suc Zero\n"),
+    "a constructor applied to a function": (_TM, _H + "f := Suc K\n"),
+    "a datum applied to its continuations": (None, _H + "f n = n Zero (\\k. k)\n"),
+    "a datum short of its continuations, used as one": (_TM, _H + "f := Suc (Zero K)\n"),
+    "a function where a datum is expected": (_TM, _H + "f n = n |> { Zero Zero ; Suc k k }\ng := f (\\x. x)\n"),
+    "polymorphism by generalization": (None, _H + "id x = x\nf := pair (id Zero) (id Yes)\n"),
+    "a monomorphic recursion": (_TM, _H + "f x = pair (f Zero) (f Yes)\n"),
+    "a mutual recursion": (None, _H + "f n = n |> { Zero Zero ; Suc k (g k) }\ng n = n |> { Zero Zero ; Suc k (f k) }\n"),
+    "self-application, equirecursive": (None, _H + "w x = x x\n"),
+    "omega": (None, _H + "o := S I I (S I I)\n"),
+    # cases
+    "a case's scrutinee of another type": (_TM, _H + "f := Yes |> { Zero Zero ; Suc k k }\n"),
+    "a case's branches disagreeing": (_TM, _H + "f n = n |> { Zero Zero ; Suc k Yes }\n"),
+    "a case's binder of its field's type": (_TM, _H + "f n = n |> { Zero Yes ; Suc k k }\n"),
+    # EQ, data
+    "EQ of data": (None, _H + "EQ x y = x\nf := EQ Zero Yes\n"),
+    "EQ of a function through a binder": (_TM, _H + "EQ x y = x\nf x = EQ x Yes\ng := f K\n"),
+    "EQ through an alias": (_TM, _H + "EQ x y = x\neq = EQ\nf := eq K Zero\n"),
+    "EQ of a cell of a function": (_TM, _H + "EQ x y = x\nf := EQ [Zero K] [Zero Zero]\n"),
+    # numerals and lists
+    "natAdd of numerals": (None, _H + "f := natAdd Zero (Suc Zero)\n"),
+    "natAdd of a truth value": (_TM, _H + "f := natAdd Yes Zero\n"),
+    "natIfEq's outcomes of one type": (_TM, _H + "f := natIfEq Zero Zero Yes Zero\n"),
+    "listLength of a numeral": (_TM, _H + "f := listLength Zero\n"),
+    # a list operation Stage B accepts waits for front1 to install the list
+    # operations, as it does the numeral operations (WORKLIST, M6)
+    "listAt of the wrong element": (_TM, _H + "f := listAt (cons Zero nil) Zero Yes\n"),
+    # literals
+    "a literal of the one numeral type": (None, _H + "f := Suc 3\n"),
+    "a literal defaulted": (None, _H + "f := 3\n"),
+    "a literal with no numeral type": (None, "bool === Yes | No\nf := 3\n"),
+    "a literal where a truth value is expected": (_TM, _H + "f n = n |> { Zero 2 ; Suc k Yes }\n"),
+    "a literal between two numeral types": (_TM, _H + "num === NZ | NS num\nf := 3\n"),
+    "a literal two numeral types fix": (None, _H + "num === NZ | NS num\nf := NS 3\n"),
+    # cells and picks
+    "a cell picked": (None, _H + "f := 2@[Zero Yes]\n"),
+    "a pick of the wrong type": (_TM, _H + "f := Suc (3@[Zero Yes])\n"),
+    # signatures
+    "a signature that holds": (None, _H + "f : nat -> nat\nf x = Suc x\n"),
+    "a signature that does not": (_TM, _H + "f : nat -> bool\nf x = Suc x\n"),
+    "a signature of an undeclared type": (_TM, _H + "f : nat -> thing\nf x = x\n"),
+    "a signature of no definition": (None, _H + "f : nat -> nat\ng := Zero\n"),
+    "a signature of fuel": (None, _H + "f : fuel -> fuel\nf x = suc x\n"),
+    # declarations
+    "a constructor of an undeclared field type": (_TM, _H + "t === A thing\n"),
+    "a core's equations, its parameter typed": (None, _H + "c p := {\n  a x = pair p x\n  b y = a y\n}\n"),
+    "a core's equations disagreeing": (_TM, _H + "c := {\n  a x = Suc x\n  b y = a Yes\n}\n"),
+    "a name unresolved in a macro body": (_TM, _H + "m x :=* y\nf := m Zero\n"),
+    # quotation and runs
+    "a datum": (None, _Q + "d := <K I>\n"),
+    "a level-1 run": (None, _Q + "r := whnfF |- <K I>@2\n"),
+    # runs are typed after every level-0 group, so a level-0 name of one is
+    # unresolved then
+    "a run's result used as a term": (_TM, _Q + "r := whnfF |- <K I>@2\nf := App r r\n"),
+    "a run's result as a value of its type": (_TM, _Q + "r := whnfF |- <K I>@2\nf := r |> { Nothing r ; Just t (Just t) }\n"),
+}
+
+EDGES6: Dict[str, str] = {k: v[1] for k, v in STAGEB.items()}
 
 
 #: a refusal's class, as front1 numbers it (its `result` type): 0 where the
@@ -848,7 +914,7 @@ def main(argv=None) -> int:
                 fail += 1
     if a.edges:
         bad = 0
-        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB, **EDGES5}
+        edges = {**EDGES, **EDGES1, **EDGES2, **EDGES3, **EDGES4, **EDGESL, **EDGESB, **EDGES5, **EDGES6}
         for what, text in edges.items():
             why = compare(run_avon(a.avon, text, extra)[1], reference(text))
             if why:
