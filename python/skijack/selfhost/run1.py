@@ -1,20 +1,24 @@
 """The full language's front end (front1.ascii.ski), checked in Avon.
 
     python3 -m skijack.selfhost.run1 --avon PATH [--corpus [--expect M]] [--edges]
-                                     [--random N] [--random1 N] [--seed N] [--no-fixed-point]
+                                     [--random N] [--random1 N] [--random6 N] [--seed N] [--no-fixed-point]
                                      [--templates [--data] [--fix]]
 
 front1 is the self-hosted front end for the whole of SKIjack, built in
 milestones (avon docs/WORKLIST.md, Stage 8): M1 cores, macros,
 signatures and the Tier 1 birds; M2 interpreter generation; M3
 quotation; M4 scries and namespace literals; then numeral literals; M5
-Stage A.  Its reference is Stage A (`skijack.check`) over the parsed
-program, then the expander with checking off, `skijack.compile(text,
-check=False)`: checking only refuses, and never changes a term
-(DESIDERATA.md item 11), so the terms of every program both accept are
-what front1 must give, hash for hash.  A refusal carries its class
-(CLASSES): Stage A's first problem's, or 0 where the parser or the
-expander refuses.  A term holding a name the expander left unresolved, a
+Stage A; M6 Stage B.  Its reference is the expander's own order: Stage A
+(`skijack.check`) over the parsed program, generation, Stage B
+(`skijack.typecheck`) over the generated program, then the expander with
+checking off, `skijack.compile(text, check=False)`: checking only
+refuses, and never changes a term (DESIDERATA.md item 11), so the terms of
+every program the checks accept are what front1 must give, hash for hash.
+A refusal carries its class (CLASSES): Stage A's first problem's, 7 for
+Stage B's, or 0 where the parser or the expander refuses.  front1 must
+agree only where both can witness: a refusal Python gives because Stage B
+outran its recursion limit is not compared (UNWITNESSED), and front1 may
+accept that program.  A term holding a name the expander left unresolved, a
 free atom, counts as a refusal: Stage B refuses it ("unresolved name").
 
 The comparison is as a map, a name to its term's §5 hash: Python's
@@ -28,6 +32,8 @@ as the later assignment does in expand.py.
 - `--edges`: run0's edge programs and each milestone's, against the full
   reference.
 - `--random N`: run0's random SKIjack-0 programs.
+- `--random6 N`: random programs typed as they are written, which Stage B
+  accepts but for one ill-typed subterm in about one in seven.
 - `--random1 N`: random programs of the full language: macros, cores,
   birds, object types and their interpreter cores, datums and level-1
   runs.
@@ -554,6 +560,153 @@ def _program2(rng: random.Random) -> str:
     return "\n".join(lines) + "\n"
 
 
+#: Stage B's accepting paths: programs typed as they are written
+_NAT, _BOOL = "nat", "bool"
+
+
+def _cell(a, b):
+    return ("cell", a, b)
+
+
+def _fn(a, b):
+    return ("fn", a, b)
+
+
+def _simple(rng):
+    return rng.choice([_NAT, _BOOL, _NAT])
+
+
+def _ty(rng, depth=0):
+    r = rng.random()
+    if depth < 1 and r < 0.15:
+        return _cell(_simple(rng), _simple(rng))
+    if depth < 1 and r < 0.25:
+        return _fn(_simple(rng), _simple(rng))
+    return _simple(rng)
+
+
+def _sig(t):
+    if t == _NAT or t == _BOOL:
+        return t
+    return None
+
+
+class _Typed:
+    def __init__(self, rng):
+        self.rng = rng
+        self.funs = []          # (name, [param types], result type, poly)
+        self.n = 0
+
+    def fresh(self, base):
+        self.n += 1
+        return f"{base}{self.n}"
+
+    def expr(self, t, env, depth, rec=None):
+        """An expression of type t over env [(name, type)]."""
+        rng = self.rng
+        if isinstance(t, tuple) and t[0] == "fn":
+            x = self.fresh("x")
+            return f"(\\{x}. {self.expr(t[2], env + [(x, t[1])], depth + 1, rec)})"
+        if isinstance(t, tuple) and t[0] == "cell":
+            return f"[{self.expr(t[1], env, depth + 1, rec)} {self.expr(t[2], env, depth + 1, rec)}]"
+        opts = ["leaf"]
+        if depth < 3:
+            opts += ["case", "call", "case", "pick", "apply"]
+            if t == _NAT:
+                opts += ["suc", "add", "lit"]
+            if t == _BOOL:
+                opts += ["ifeq"]
+        vars_t = [x for x, xt in env if xt == t]
+        if vars_t:
+            opts += ["var", "var"]
+        k = rng.choice(opts)
+        if k == "var":
+            return rng.choice(vars_t)
+        if k == "leaf" or (k == "call" and not self.funs and rec is None):
+            if t == _NAT:
+                return rng.choice(["Zero", "(Suc Zero)", str(rng.randrange(4))])
+            return rng.choice(["Yes", "No"])
+        if k == "suc":
+            return f"(Suc {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "lit":
+            return str(rng.randrange(6))
+        if k == "add":
+            return f"(natAdd {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)})"
+        if k == "ifeq":
+            return (f"(natIfEq {self.expr(_NAT, env, depth + 1, rec)} {self.expr(_NAT, env, depth + 1, rec)} "
+                    f"{self.expr(_BOOL, env, depth + 1, rec)} {self.expr(_BOOL, env, depth + 1, rec)})")
+        if k == "pick":
+            other = _simple(rng)
+            if rng.random() < 0.5:
+                return f"(2@[{self.expr(t, env, depth + 1, rec)} {self.expr(other, env, depth + 1, rec)}])"
+            return f"(3@[{self.expr(other, env, depth + 1, rec)} {self.expr(t, env, depth + 1, rec)}])"
+        if k == "apply":
+            a = _simple(rng)
+            x = self.fresh("y")
+            return f"((\\{x}. {self.expr(t, env + [(x, a)], depth + 1, rec)}) {self.expr(a, env, depth + 1, rec)})"
+        if k == "case":
+            if rng.random() < 0.6:
+                s = self.expr(_NAT, env, depth + 1, rec)
+                j = self.fresh("j")
+                inner = env + [(j, _NAT)]
+                # recursion on the predecessor, under the case
+                return f"({s} |> {{ Zero {self.expr(t, env, depth + 1, rec)} ; Suc {j} {self.expr(t, inner, depth + 1, rec)} }})"
+            s = self.expr(_BOOL, env, depth + 1, rec)
+            return f"({s} |> {{ Yes {self.expr(t, env, depth + 1, rec)} ; No {self.expr(t, env, depth + 1, rec)} }})"
+        # a call: an earlier equation, a polymorphic one, or the recursion
+        cands = [f for f in self.funs if f[3] or f[2] == t]
+        if rec is not None and rec[2] == t and rng.random() < 0.3:
+            cands = [rec]
+        if not cands:
+            return self.expr(t, env, 3, rec)
+        name, ps, res, poly = rng.choice(cands)
+        if poly:
+            # id-like: a -> a, used at t
+            return f"({name} {self.expr(t, env, depth + 1, rec)})"
+        args = " ".join(self.expr(p, env, depth + 1, rec) for p in ps)
+        return f"({name} {args})" if args else name
+
+    def program(self, bad=False):
+        rng = self.rng
+        lines = [_H]
+        if rng.random() < 0.5:
+            lines.append("ident x = x\n")
+            self.funs.append(("ident", ["a"], "a", True))
+        for i in range(rng.randrange(2, 5)):
+            name = self.fresh("f")
+            ps = [_ty(rng) for _ in range(rng.randrange(0, 3))]
+            res = _simple(rng)
+            bs = [self.fresh("b") for _ in ps]
+            me = (name, ps, res, False)
+            body = self.expr(res, list(zip(bs, ps)), 0, me)
+            if rng.random() < 0.3 and all(_sig(p) for p in ps):
+                lines.append(f"{name} : {' -> '.join([_sig(p) for p in ps] + [res])}\n")
+            lines.append(f"{name} {' '.join(bs)} = {body}\n".replace("  =", " ="))
+            self.funs.append(me)
+        if rng.random() < 0.4:
+            c, a, b2 = self.fresh("c"), self.fresh("a"), self.fresh("e")
+            p, x = self.fresh("p"), self.fresh("x")
+            lines.append(f"{c} {p} := {{\n  {a} {x} = {self.expr(_NAT, [(p, _NAT), (x, _NAT)], 1)}\n"
+                         f"  {b2} {x} = {a} (Suc {x})\n}}\n")
+        if rng.random() < 0.3:
+            f, g, n = self.fresh("m"), self.fresh("m"), self.fresh("n")
+            lines.append(f"{f} {n} = {n} |> {{ Zero Yes ; Suc k ({g} k) }}\n")
+            lines.append(f"{g} {n} = {n} |> {{ Zero No ; Suc k ({f} k) }}\n")
+        text = "".join(lines)
+        if bad:
+            # one ill-typed subterm: a truth value where a numeral goes
+            text = text.replace("(Suc Zero)", "(Suc Yes)", 1) if "(Suc Zero)" in text else text + "zz := Suc Yes\n"
+        return text
+
+
+def _program6(rng: random.Random) -> str:
+    """A random program Stage B accepts but for one ill-typed subterm in
+    about one in seven: equations typed before they are written, over
+    `nat`, `bool`, cells and functions, with polymorphic and mutual
+    recursion, cases, lambdas, picks, literals, signatures and cores."""
+    return _Typed(rng).program(bad=rng.random() < 0.15)
+
+
 #: M5's edges: each of Stage A's checks (check.py), passed and failed, and
 #: the order of the first problem among them; each with the class the
 #: reference gives it, None where it accepts.  Four Stage A passes are
@@ -882,6 +1035,7 @@ def main(argv=None) -> int:
     ap.add_argument("--edges", action="store_true")
     ap.add_argument("--random", type=int, default=0)
     ap.add_argument("--random1", type=int, default=0, help="random programs of the full language")
+    ap.add_argument("--random6", type=int, default=0, help="random programs typed as they are written")
     ap.add_argument("--seed", type=int, default=20260928)
     ap.add_argument("--no-fixed-point", action="store_true")
     ap.add_argument("--templates", action="store_true")
@@ -950,10 +1104,25 @@ def main(argv=None) -> int:
         print(f"random1: {a.random1 - bad} of {a.random1} agree "
               f"({accepted} accepted by the expander)")
         fail += bad
+    if a.random6:
+        rng, bad, accepted = random.Random(a.seed), 0, 0
+        for i in range(a.random6):
+            text = _program6(rng)
+            ref = reference(text)
+            why = compare(run_avon(a.avon, text, extra)[1], ref)
+            accepted += not isinstance(ref, int)
+            if why:
+                print(f"FAIL random6 program {i}: {why}\n{text}")
+                bad += 1
+        print(f"random6: {a.random6 - bad} of {a.random6} agree ({accepted} accepted)")
+        fail += bad
     if not a.no_fixed_point:
         t0 = time.time()
         text = FRONT.read_text()
-        steps, got = run_avon(a.avon, text, extra)
+        # the same terms in every mode; without templates Stage B's run
+        # would take more than 12 GB, so the fixed point always has them
+        fp = extra if a.templates else (f"--templates={term_dir()}", "--data")
+        steps, got = run_avon(a.avon, text, fp)
         why = compare(got, reference(text))
         if isinstance(got, int) and not why:
             why = "front1 and the reference both refuse front1's own source"

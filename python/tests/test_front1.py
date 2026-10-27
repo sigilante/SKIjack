@@ -2,12 +2,12 @@
 Stage 8): M1 cores, macros, signatures, the Tier 1 birds and the numeral
 operations; M2 interpreter generation; M3 quotation; M4 scries, paths and
 namespace literals; Lit numeral literals; M5 Stage A, each refusal with
-its class.  M6, Stage B, is to come.
+its class; M6 Stage B.
 
 ``skijack/selfhost/front1.ascii.ski`` is compiled by this package, with
 checking.  With ``AVON`` naming an avon binary, the last tests run it
-through ``skijack.selfhost.run1`` against Stage A and then the expander
-with checking off: the corpus, each milestone's edge programs, random
+through ``skijack.selfhost.run1`` against Stage A, Stage B and then the
+expander with checking off: the corpus, each milestone's edge programs, random
 programs and the fixed point; otherwise they skip.
 ``avon/tests/front1_check.sh`` runs the same checks at full size.
 """
@@ -56,14 +56,14 @@ def test_the_front_end_compiles_with_checking():
 
 
 EDGES = {**run1.EDGES, **run1.EDGES1, **run1.EDGES2, **run1.EDGES3, **run1.EDGES4,
-         **run1.EDGESL, **run1.EDGESB, **run1.EDGES5}
+         **run1.EDGESL, **run1.EDGESB, **run1.EDGES5, **run1.EDGES6}
 
 
-@pytest.mark.parametrize("what", list(run1.STAGEA))
-def test_each_stage_a_edge_is_classed_as_it_says(what):
-    """The reference itself, without Avon: each of M5's edges gets the class
-    it was written for, so the edges test what they name."""
-    want, text = run1.STAGEA[what]
+@pytest.mark.parametrize("what", list(run1.STAGEA) + list(run1.STAGEB))
+def test_each_checker_edge_is_classed_as_it_says(what):
+    """The reference itself, without Avon: each of M5's and M6's edges gets
+    the class it was written for, so the edges test what they name."""
+    want, text = {**run1.STAGEA, **run1.STAGEB}[what]
     ref = run1.reference(text)
     assert (None if isinstance(ref, dict) else run1.CLASSES[ref]) == want
 
@@ -97,7 +97,19 @@ def test_random_programs_compile_as_the_expander_has_them():
 
 
 @needs_avon
+def test_random_typed_programs_compile_as_the_expander_has_them():
+    """Stage B's accepting paths: programs typed as they are written."""
+    rng = random.Random(20261027)
+    for _ in range(20):
+        text = run1._program6(rng)
+        assert run1.compare(run1.run_avon(AVON, text)[1], run1.reference(text)) == "", text
+
+
+@needs_avon
 def test_the_front_end_compiles_itself():
+    """With templates and data jets: the same terms, from fewer contractions
+    and in a third of the memory, as Stage B's run would take more than 12
+    GB without them."""
     text = SOURCE.read_text()
-    _steps, got = run1.run_avon(AVON, text)
+    _steps, got = run1.run_avon(AVON, text, (f"--templates={run1.term_dir()}", "--data"))
     assert run1.compare(got, run1.reference(text)) == ""
