@@ -565,7 +565,9 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "a type's name as a value": ("ScopeError", _H + "f := nat\n"),
     "a macro's name": (None, _H + "m x :=* x\nf := m Zero\n"),
     "the prelude's names": (None, _H + "f := pair (cons Zero nil) (hd (tl (suc zero)))\n"),
-    "natDiv and listLength named": (None, _H + "f := natDiv (natRem Zero Zero) (listLength nil)\n"),
+    # the prelude's later names are known to Stage A; front1 does not yet
+    # install them (WORKLIST), so a case error after them tells the two apart
+    "natDiv and listLength known": ("CaseError", _H + "f := natDiv (natRem Zero Zero) (listLength nil)\ng n = n |> { Zero Zero }\n"),
     "a core's sibling and parameter": (None, _H + "c p := {\n  a x = b p\n  b y = y\n}\n"),
     "a core's sibling outside it": ("ScopeError", _H + "c := {\n  a x = x\n}\nf := a\n"),
     "generated names known": (None, _T + _M + _C + "f := sp\ng := resK\nh := stepI\n"),
