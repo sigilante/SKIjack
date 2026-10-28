@@ -202,6 +202,13 @@ toward the full language, milestone by milestone (avon
   problem is class 7;
 - the prelude's later operations: `natDiv`, `natRem` and the list
   operations, installed as the expander installs them.
+- its own templates: `ROk outs tpls`, the second field each rule's
+  formals, body and references as its expander abstracts them, read only
+  by Avon's `front0 --emit`, which writes them as `templates.tsv` and
+  `template_terms.tsv`; a run that never reads them never makes them.
+  For its own source it gives every one of `skijack.templates`' 2,326,
+  key, arity and body alike, so a pill holding front1 has its templates
+  with no Python (avon `docs/SKA.md` §7).
 
 Every one of the eighteen corpus programs the expander compiles compiles
 through it to the expander's terms, and it refuses the four the expander
@@ -209,5 +216,6 @@ refuses, each with Stage A's class. It is still a SKIjack-0 program.
 `run1.py` checks it against Stage A,
 Stage B and then the expander with checking off, on the corpus, edge
 programs, random programs, typed random programs and its own source;
+`run1.py --emit` checks its templates against `skijack.templates`;
 `tests/test_front1.py` runs those checks when `AVON` is set, and
 `avon/tests/front1_check.sh` runs them at full size.

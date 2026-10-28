@@ -53,12 +53,13 @@ jobs:
   # Every reduction the suite makes, run by Avon and by aviary and compared
   # (SKIJACK_REDUCER=check), with the front-end tests, which need Avon too.
   # Avon is built at a pinned commit, one whose template loader reads a
-  # referenced term in the DAG form, as skijack.templates writes it.
+  # referenced term in the DAG form, as skijack.templates writes it, and
+  # whose front0 reads front1's ROk with its templates and emits them.
   avon:
     name: pytest, every reduction checked against Avon
     runs-on: ubuntu-24.04
     env:
-      AVON_REF: 2c082cc25bb4908c5bec0ccadf8e4e48175b6d63   # sigilante/avon #82, DAG template terms
+      AVON_REF: ef4721afb715d2d55620562d580458ea88c38011   # sigilante/avon #91, front0 --emit
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
