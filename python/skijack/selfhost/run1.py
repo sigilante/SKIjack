@@ -1147,10 +1147,10 @@ def main(argv=None) -> int:
         if a.emit:
             same = bad = added = 0
             for f in sorted(CORPUS.glob("*.ascii.ski")):
-                got = emitted(a.avon, f.read_text(), extra)
-                if got is None:
+                own = emitted(a.avon, f.read_text(), extra)
+                if own is None:
                     continue                    # refused: no templates
-                why, more = compare_templates(got, python_templates(f.read_text()))
+                why, more = compare_templates(own, python_templates(f.read_text()))
                 added += more
                 if why:
                     print(f"  {f.name}: {why}")
@@ -1234,14 +1234,14 @@ def main(argv=None) -> int:
             print(f"fixed point: front1 gives all {len(got)} of its own names their terms "
                   f"({int(steps):,} contractions, {time.time() - t0:.0f}s)")
         if a.emit:
-            got = emitted(a.avon, text, fp)
-            why, more = ("front1 refuses its own source", 0) if got is None else \
-                compare_templates(got, python_templates(text))
-            if why:
+            own = emitted(a.avon, text, fp)
+            why, more = ("front1 refuses its own source", 0) if own is None else \
+                compare_templates(own, python_templates(text))
+            if why or own is None:
                 print(f"FAIL fixed point's templates: {why}")
                 fail += 1
             else:
-                print(f"fixed point's templates: front1 emits all {len(got) - more} of Python's"
+                print(f"fixed point's templates: front1 emits all {len(own) - more} of Python's"
                       f" ({more} keys more)")
     return 1 if fail else 0
 
