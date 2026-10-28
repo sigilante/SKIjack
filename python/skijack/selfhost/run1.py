@@ -2,7 +2,7 @@
 
     python3 -m skijack.selfhost.run1 --avon PATH [--corpus [--expect M]] [--edges]
                                      [--random N] [--random1 N] [--random6 N] [--seed N] [--no-fixed-point]
-                                     [--templates [--data] [--fix]]
+                                     [--templates [--data] [--fix]] [--emit]
 
 front1 is the self-hosted front end for the whole of SKIjack, built in
 milestones (avon docs/WORKLIST.md, Stage 8): M1 cores, macros,
@@ -38,6 +38,11 @@ as the later assignment does in expand.py.
   birds, object types and their interpreter cores, datums and level-1
   runs.
 - The fixed point: front1 compiling its own source.
+- `--emit`: with the corpus and the fixed point, front1's own templates,
+  ROk's second field as Avon's `front0 --emit` writes them, against
+  `skijack.templates` over the expander's rules: every key Python gives,
+  each with one of the bodies Python gives it.  η-templates neither side
+  keeps; a key only front1 gives is counted.
 """
 
 from __future__ import annotations
@@ -63,7 +68,7 @@ from skijack.dictionary import structural_hash
 from skijack.expand import _generate, program_prelude
 from skijack.errors import SkijackError
 from skijack.export import jam
-from skijack.templates import templates, write as write_templates, write_words
+from skijack.templates import body_text, templates, write as write_templates, write_words
 from skijack.typecheck import _UNSETTLED, typecheck_program
 
 from .run0 import Deep, EDGES, TERMS, _H
@@ -979,6 +984,57 @@ def run_avon(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Tuple[str, Re
     return steps, out
 
 
+Templates = Dict[str, set]
+
+
+def emitted(avon: str, text: str, extra: Tuple[str, ...] = ()) -> Optional[Dict[str, tuple]]:
+    """front1's own templates for text, as Avon's front0 --emit writes
+    them: key -> (arity, formals, body); None if front1 refuses text."""
+    with tempfile.TemporaryDirectory() as d, \
+            tempfile.NamedTemporaryFile("w", suffix=".ski", delete=False) as f:
+        f.write(text)
+        f.close()
+        try:
+            p = subprocess.run([avon, "front0", *extra, f"--emit={d}", str(term_dir()), f.name],
+                               capture_output=True, text=True)
+        finally:
+            pathlib.Path(f.name).unlink()
+        if p.stdout.startswith("RErr"):
+            return None
+        if p.returncode != 0:
+            raise RuntimeError(f"avon front0 --emit failed: {p.stderr.strip()[:400]}")
+        out: Dict[str, tuple] = {}
+        for line in (pathlib.Path(d) / "templates.tsv").read_text().splitlines():
+            c = line.split("\t")
+            out[c[0]] = (int(c[3]), c[4], c[5])
+        return out
+
+
+def python_templates(text: str) -> Templates:
+    """skijack.templates over the expander's rules: key -> its bodies, as
+    (arity, formals, body); two rules compiling to one term give it two."""
+    with Deep():
+        exp = skijack.compile(text, lexicon="ascii", check=False)
+        out: Templates = {}
+        for t in templates(exp):
+            out.setdefault(t.key_hash, set()).add(
+                (t.arity, ",".join(map(str, t.formals)), body_text(t.body)))
+        return out
+
+
+def compare_templates(got: Dict[str, tuple], want: Templates) -> Tuple[str, int]:
+    """Every key Python gives, each emitted with one of the bodies Python
+    gives it; or why not.  And how many keys front1 adds: a rule front1
+    makes where Python builds the same term without one, which Avon's
+    loader checks against its key as any other."""
+    bad = [k for k in got if k in want and got[k] not in want[k]]
+    missing = [k for k in want if k not in got]
+    extra = sum(1 for k in got if k not in want)
+    if bad or missing:
+        return f"templates differ: {len(bad)} emitted unlike Python's, {len(missing)} not emitted", extra
+    return "", extra
+
+
 def reference(text: str) -> Result:
     """As the expander checks before it expands: Stage A's first problem's
     class over the parsed program; then a binder named S, K or I and
@@ -1069,6 +1125,7 @@ def main(argv=None) -> int:
     ap.add_argument("--templates", action="store_true")
     ap.add_argument("--data", action="store_true")
     ap.add_argument("--fix", action="store_true")
+    ap.add_argument("--emit", action="store_true", help="check front1's own templates too")
     a = ap.parse_args(argv)
     if (a.data or a.fix) and not a.templates:
         ap.error("--data and --fix need --templates")
@@ -1087,6 +1144,22 @@ def main(argv=None) -> int:
             else:
                 agree.add(stem)
         print(f"corpus: {len(agree)} of {len(list(CORPUS.glob('*.ascii.ski')))} agree")
+        if a.emit:
+            same = bad = added = 0
+            for f in sorted(CORPUS.glob("*.ascii.ski")):
+                got = emitted(a.avon, f.read_text(), extra)
+                if got is None:
+                    continue                    # refused: no templates
+                why, more = compare_templates(got, python_templates(f.read_text()))
+                added += more
+                if why:
+                    print(f"  {f.name}: {why}")
+                    bad += 1
+                else:
+                    same += 1
+            print(f"corpus templates: {same} of {same + bad} accepted programs emit Python's "
+                  f"({added} keys more, of rules Python does not make)")
+            fail += bad
         if a.expect:
             keys = list(MILESTONES)
             want = [p for k in keys[: keys.index(a.expect) + 1] for p in MILESTONES[k]]
@@ -1160,6 +1233,16 @@ def main(argv=None) -> int:
         else:
             print(f"fixed point: front1 gives all {len(got)} of its own names their terms "
                   f"({int(steps):,} contractions, {time.time() - t0:.0f}s)")
+        if a.emit:
+            got = emitted(a.avon, text, fp)
+            why, more = ("front1 refuses its own source", 0) if got is None else \
+                compare_templates(got, python_templates(text))
+            if why:
+                print(f"FAIL fixed point's templates: {why}")
+                fail += 1
+            else:
+                print(f"fixed point's templates: front1 emits all {len(got) - more} of Python's"
+                      f" ({more} keys more)")
     return 1 if fail else 0
 
 

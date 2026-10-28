@@ -230,7 +230,15 @@ sigs  === SgNil | SgCons ident names sigs
 -- or the expander refuses, else Stage A's first problem's (check.py),
 -- 1 ScopeError, 2 ArityError, 3 CaseError, 4 DataError, 5 InterfaceError,
 -- 6 SymbolTableError, then Stage B's (typecheck.py), 7 TypeMismatchError
-result === ROk outs | RErr nat
+-- a rule's template, as ruleTm abstracts it: its term, its formals'
+-- count, its body over the formals (TV 0 ..) and its references (TV nf
+-- ..), and the references' terms; what making them threads
+tpl   === Tpl tm nat tm tms
+tpls  === TpNil | TpCons tpl tpls
+tpr   === TPR tm nat tms memo tpls
+tpq   === TPQ tm memo tpls
+tpw   === TPW memo tpls
+result === ROk outs tpls | RErr nat
 -- BEGIN GENERATED
 classify c = c |> { Code b6 b5 b4 b3 b2 b1 b0 (b6 |> { Lo (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo ChOther ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi (b0 |> { Lo ChNl ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChSpace }) ; Hi ChOther }) }) }) ; Hi ChOther }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChSpace ; Hi (ChSym SBang) }) ; Hi ChOther }) ; Hi (b1 |> { Lo ChOther ; Hi (b0 |> { Lo ChOther ; Hi ChPrime }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SLP) ; Hi (ChSym SRP) }) ; Hi (b0 |> { Lo (ChSym SStar) ; Hi ChOther }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SComma) ; Hi (ChSym SMinus) }) ; Hi (b0 |> { Lo (ChSym SDot) ; Hi (ChSym SSlash) }) }) }) }) ; Hi (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit Zero) ; Hi (ChDigit (Suc Zero)) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc Zero))) ; Hi (ChDigit (Suc (Suc (Suc Zero)))) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc Zero))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc Zero)))))) }) ; Hi (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))) }) }) }) ; Hi (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero))))))))) ; Hi (ChDigit (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc (Suc Zero)))))))))) }) ; Hi (b0 |> { Lo (ChSym SColon) ; Hi (ChSym SSemi) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SLt) ; Hi (ChSym SEq) }) ; Hi (b0 |> { Lo (ChSym SGt) ; Hi (ChSym SQuest) }) }) }) }) }) }) ; Hi (b5 |> { Lo (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo (ChSym SAt) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLB) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBack) ; Hi (ChSym SRB) }) ; Hi (b0 |> { Lo (ChSym SCaret) ; Hi ChLetter }) }) }) }) }) ; Hi (b4 |> { Lo (b3 |> { Lo (b2 |> { Lo (b1 |> { Lo (b0 |> { Lo ChOther ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi ChLetter }) ; Hi (b3 |> { Lo ChLetter ; Hi (b2 |> { Lo (b1 |> { Lo ChLetter ; Hi (b0 |> { Lo ChLetter ; Hi (ChSym SLC) }) }) ; Hi (b1 |> { Lo (b0 |> { Lo (ChSym SBar) ; Hi (ChSym SRC) }) ; Hi ChOther }) }) }) }) }) }) }
 nameS := (NCons (Code Hi Lo Hi Lo Lo Hi Hi) NNil)
@@ -860,6 +868,19 @@ snoc ls t = ls |> { TmNil (TmCons t TmNil) ; TmCons u r (TmCons u (snoc r t)) }
 minus n m = m |> { Zero n ; Suc k (minus (predN n) k) }
 nthT ls i = ls |> { TmNil TI ; TmCons t r (i |> { Zero t ; Suc k (nthT r k) }) }
 subst nf ls t = t |> { TS TS ; TK TK ; TI TI ; TV n (nthT ls (minus n nf)) ; TA p (p |> { Ap e f (app (subst nf ls e) (subst nf ls f)) }) }
+-- templates: each rule's formals and body as ruleTm abstracts them, a
+-- lifted rule inside a body yielding its own, from the memo the terms were
+-- made with; ROk's second field, read only by Avon's front0 --emit, so a
+-- run that never asks never makes them
+ruleTp rs r me acc = r |> { Rule fs b (tpMk (lenN fs) fs (inlT rs fs (lenN fs) b Zero TmNil me acc)) }
+tpMk nf fs q = q |> { TPR t j ls me acc (tpKey nf t ls me acc (subst nf ls (absAll Zero fs t))) }
+tpKey nf t ls me acc k = TPQ k me (TpCons (Tpl k nf t ls) acc)
+inlT rs fs nf b j ls me acc = b |> { RVar n (TPR (TV (lastFrom n fs Zero Zero)) j ls me acc) ; RIx k (TPR (TV k) j ls me acc) ; RRef n (leafTp nf j ls acc (tof rs n me NmNil)) ; RS (TPR TS j ls me acc) ; RK (TPR TK j ls me acc) ; RI (TPR TI j ls me acc) ; RAp p (p |> { RA f a (inlT2 rs fs nf a (inlT rs fs nf f j ls me acc)) }) ; RRule r (ruleTp rs r me acc |> { TPQ t me2 acc2 (TPR (TV (add nf j)) (Suc j) (snoc ls t) me2 acc2) }) ; RQuote x q (leafTp nf j ls acc (quoteTm rs x q me NmNil)) ; RBad (TPR TI j ls me acc) }
+inlT2 rs fs nf a q = q |> { TPR tf j ls me acc (inlT rs fs nf a j ls me acc |> { TPR ta j2 ls2 me2 acc2 (TPR (app tf ta) j2 ls2 me2 acc2) }) }
+leafTp nf j ls acc q = q |> { TM t me (TPR (TV (add nf j)) (Suc j) (snoc ls t) me acc) }
+tpRm rs m me acc = m |> { Rm0 (TPW me acc) ; RmT t (t |> { RmB v z o (tpRu rs v me acc |> { TPW me2 acc2 (tpRm rs z me2 acc2 |> { TPW me3 acc3 (tpRm rs o me3 acc3) }) }) }) }
+tpRu rs v me acc = v |> { MRuNone (TPW me acc) ; MRu r (ruleTp rs r me acc |> { TPQ t me2 acc2 (TPW me2 acc2) }) }
+tpAll rs me = tpRm rs rs me TpNil |> { TPW me2 ts ts }
 -- each pair: the name to print, and the name whose term it is; once an
 -- error is marked, the result is RErr and no more terms are made
 outAll rv rs ps me = ps |> { PrNil (OA ONil me) ; PrCons n x r (findMe idAt me |> { MTm t (OA ONil me) ; MTmNone (outAll2 (nameFor rv n) (tof rs x me NmNil) (outAll rv rs r)) }) }
@@ -890,9 +911,10 @@ countN n ns = ns |> { NmNil Zero ; NmCons m r (eqId n m |> { Yes (Suc (countN n 
 bareAll ds = ds |> { DNil NmNil ; DCons d r (d |> { DCore n ps es (appN (bareAll es) (bareAll r)) ; DCEq c n rn bs x (NmCons n (bareAll r)) ; DEq n bs x (bareAll r) ; DDef n x (bareAll r) ; DType n cs fs (bareAll r) ; DMacro n ps c x (bareAll r) }) }
 coreP bn qn ds = ds |> { DNil PrNil ; DCons d r (d |> { DCore n ps es (appP (coreP bn qn es) (coreP bn qn r)) ; DCEq c n rn bs x (PrCons c c (andB (eqN (countN n bn) one) (notB (memN n qn)) |> { Yes (PrCons n c (coreP bn qn r)) ; No (coreP bn qn r) })) ; DEq n bs x (coreP bn qn r) ; DDef n x (coreP bn qn r) ; DType n cs fs (coreP bn qn r) ; DMacro n ps c x (coreP bn qn r) }) }
 loopP ls = ls |> { RnNil PrNil ; RnCons n c r (PrCons n c (loopP r)) }
--- the prelude's successor as a term: the numeral operations and fuel
--- use it, not the name `suc`, which a program may define for itself
-sucR := rapp (rapp RS (rapp RK RK)) (rapp (rapp RS (rapp RK (rapp RS RI))) RK)
+-- the prelude's successor as a rule of its own: the numeral operations
+-- and fuel use it, not the name `suc`, which a program may define for
+-- itself; a rule, so a template's body names it as Python's does
+sucR := RRule (Rule (dum three) (rapp (RIx two) (RIx Zero)))
 -- the numeral and list operations a program names and does not define,
 -- each `Y` of a generator taking itself first; expand.py's helper rules
 -- are inline here, and the operations one uses (natMul's natAdd, natDiv's
@@ -1624,5 +1646,5 @@ front6a rv ds env ls rs qd qe x = qcomp (qbody x) x qe qd Ns0 |> { QOErr (RErr Z
 front7a rv ds env ls qd rs dts l1 ck rt qe = rootsOK rs (setOf dts Ns0) rt |> { No (RErr Zero) ; Yes (qe |> { QE apc lv (front8 rv ds env ls (qNames qd) rs dts l1 ck (seedMe lv Zero Me0)) }) }
 front8 rv ds env ls qn rs dts l1 ck me0 = badRs rs |> { Yes (RErr Zero) ; No (front9 (outAll rv rs (appP (selfP (notIn qn env)) (appP (selfP dts) (appP (coreP (bareAll ds) qn ds) (appP (loopP ls) (selfP l1))))) me0) rs ck) }
 -- the level-1 runs without a closed term are still made, for their errors
-front9 q rs ck = q |> { OA os me (forceAll rs ck me |> { MTm t (RErr Zero) ; MTmNone (ROk os) }) }
+front9 q rs ck = q |> { OA os me (forceAll rs ck me |> { MTm t (RErr Zero) ; MTmNone (ROk os (tpAll rs me)) }) }
 forceAll rs ck me = findMe idAt me |> { MTm t (MTm t) ; MTmNone (ck |> { NmNil MTmNone ; NmCons n r (tof rs n me NmNil |> { TM t me2 (forceAll rs r me2) }) }) }

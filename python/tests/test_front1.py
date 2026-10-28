@@ -8,7 +8,8 @@ its class; M6 Stage B.
 checking.  With ``AVON`` naming an avon binary, the last tests run it
 through ``skijack.selfhost.run1`` against Stage A, Stage B and then the
 expander with checking off: the corpus, each milestone's edge programs, random
-programs and the fixed point; otherwise they skip.
+programs and the fixed point, and front1's own templates against
+``skijack.templates``; otherwise they skip.
 ``avon/tests/front1_check.sh`` runs the same checks at full size.
 """
 
@@ -77,6 +78,18 @@ needs_avon = pytest.mark.skipif(not AVON, reason="AVON names no avon binary")
 def test_a_corpus_program_compiles_as_the_expander_has_it(stem):
     text = (CORPUS / f"{stem}.ascii.ski").read_text()
     assert run1.compare(run1.run_avon(AVON, text)[1], run1.reference(text)) == ""
+
+
+@needs_avon
+@pytest.mark.parametrize("stem", ["literals", "scry-ns"])
+def test_a_corpus_program_emits_the_expanders_templates(stem):
+    # front1's own templates, ROk's second field, as Avon's front0 --emit
+    # writes them: every key skijack.templates gives, with one of its bodies
+    text = (CORPUS / f"{stem}.ascii.ski").read_text()
+    got = run1.emitted(AVON, text)
+    assert got is not None
+    why, _ = run1.compare_templates(got, run1.python_templates(text))
+    assert why == ""
 
 
 @needs_avon
