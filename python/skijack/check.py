@@ -35,9 +35,10 @@ Two readings this pass takes, both stated in the README:
   branch the parser already fixes the binder count at the arity.
 * **§5's data/function line refuses what it can prove is a function**,
   not everything it cannot prove is data.  With no types, a binder's
-  kind is unknown until Stage B; an equation name, a bare combinator, a
-  lambda, a macro and a partially applied constructor are known
-  functions, and those are refused.
+  kind is unknown until Stage B; a lambda, a macro, a combinator or an
+  equation applied to fewer arguments than it takes, an equation applied
+  to exactly as many whose body is one of these, and a partially applied
+  constructor are known functions, and those are refused.
 """
 
 from __future__ import annotations
@@ -46,6 +47,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .abi import ISA as _ISA, TIER1_NAMES
+
+#: How many arguments each combinator takes before it contracts.
+_COMB_ARITY = {"S": 3, "K": 2, "I": 1, "B": 3, "C": 3, "W": 2, "Y": 1}
 
 from . import ast as A
 from .generate import (GenerateError, ObjectType, PathType, find_object_type,
@@ -425,10 +429,17 @@ class _Checker:
                          f"value of function type cannot be compared")
 
     def provably_function(self, e: A.Expr, core: Optional[str],
-                          bound: Set[str]) -> Optional[str]:
+                          bound: Set[str],
+                          seen: Optional[Set[str]] = None) -> Optional[str]:
         """What makes ``e`` a function, or ``None`` when Stage A cannot
         tell.  Conservative on purpose: with no types a binder's kind is
-        unknown until Stage B."""
+        unknown until Stage B.  A combinator or an equation is a function
+        when it is applied to fewer arguments than it takes; applied to
+        exactly as many, an equation is what its body is (``k2 = K K`` is a
+        function, ``two x = Suc (Suc x)`` applied to one argument is data),
+        and with more arguments Stage A cannot tell.  ``seen`` stops the
+        unfolding at a recursive equation."""
+        seen = set() if seen is None else seen
         if isinstance(e, (A.Quote, A.Scry, A.Cell)):
             return None
         if isinstance(e, A.Lambda):
@@ -442,7 +453,9 @@ class _Checker:
         if nm in bound:
             return None
         if nm in _ISA or nm in TIER1_NAMES:
-            return f"the combinator {nm!r}"
+            if len(args) < _COMB_ARITY.get(nm, 1):
+                return f"the combinator {nm!r}"
+            return None
         if nm in self.env.ctors:
             arity = self.env.ctors[nm][2]
             if len(args) < arity:
@@ -451,11 +464,21 @@ class _Checker:
             return None
         if nm in self.env.macros:
             return f"the macro {nm!r}"
-        if nm in self.env.equations and self.env.equations[nm].binders:
-            return f"the equation {nm!r}"
+        eqn = None
         if core is not None and nm in self.env.core_equations.get(core, ()):
-            if self.env.core_equations[core][nm].binders:
+            eqn = self.env.core_equations[core][nm]
+        elif nm in self.env.equations:
+            eqn = self.env.equations[nm]
+        if eqn is not None:
+            k = len(eqn.binders)
+            if len(args) < k:
                 return f"the equation {nm!r}"
+            if len(args) == k and nm not in seen:
+                why = self.provably_function(eqn.body, core,
+                                             set(eqn.binders), seen | {nm})
+                if why is not None:
+                    return f"the equation {nm!r}, whose body is {why}"
+            return None
         if nm in self.env.cores:
             return f"the core {nm!r}"
         return None

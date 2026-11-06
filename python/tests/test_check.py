@@ -164,6 +164,57 @@ def test_EQ_refuses_a_partially_applied_constructor():
             DataError, "applied to 0 of its 1 field")
 
 
+def test_EQ_refuses_a_zero_binder_alias_of_a_function():
+    """An equation applied to all its arguments is what its body is: with
+    no binders, ``k2 = K K`` is the function ``K K``."""
+    rejects(TERM + MAYBE + INTERP + BOOL + "k2 = K K\nf = EQ k2 k2\n",
+            DataError, "argument 1 of 'EQ' is the equation 'k2', whose body is "
+                       "the combinator 'K'")
+
+
+def test_EQ_refuses_a_lambda_bodied_equation():
+    rejects(TERM + MAYBE + INTERP + BOOL + "idf = \\x. x\nf = EQ idf idf\n",
+            DataError, "the equation 'idf', whose body is a lambda")
+
+
+def test_EQ_refuses_a_zero_binder_alias_in_a_core():
+    rejects(TERM + MAYBE + INTERP + BOOL
+            + "c := {\n  kk = K K\n  f = EQ kk kk\n}\n",
+            DataError, "the equation 'kk', whose body is the combinator 'K'")
+
+
+def test_EQ_allows_a_saturated_data_equation():
+    """``two Zero`` is ``Suc (Suc Zero)``: data, so Stage A must not refuse
+    it (an equation with binders is a function only when under-applied)."""
+    assert problems(TERM + MAYBE + INTERP + BOOL + NAT
+                    + "two x = Suc (Suc x)\nf = EQ (two Zero) (two Zero)\n") == []
+
+
+def test_EQ_allows_a_saturated_combinator():
+    """``K Zero Zero`` contracts to ``Zero``; a combinator is a function only
+    short of its arguments."""
+    assert problems(TERM + MAYBE + INTERP + BOOL + NAT
+                    + "f = EQ (K Zero Zero) Zero\n") == []
+
+
+def test_EQ_stops_at_a_recursive_equation():
+    """Unfolding is guarded: ``loop = loop`` is not provably a function, and
+    the check terminates."""
+    assert problems(TERM + MAYBE + INTERP + BOOL + "loop = loop\nf = EQ loop loop\n") == []
+
+
+def test_EQ_allows_lifted_codes():
+    """The behavioural lift at Bool -> Bool (lean-ski ``LiftBool.liftBB``)
+    returns compile-time codes, which are data: comparing two lifts is a
+    legitimate equality on data."""
+    src = (TERM + MAYBE + INTERP + BOOL
+           + "ckk := <K K>\ncid := <I>\ncnot := <S (S I (K (K I))) (K K)>\n"
+             "cff := <K (K I)>\n"
+             "liftBB g = g PTrue (g PFalse ckk cid) (g PFalse cnot cff)\n"
+             "eqBB a b = EQ (liftBB a) (liftBB b)\n")
+    assert problems(src) == []
+
+
 def test_EQ_allows_a_binder_because_Stage_A_cannot_know():
     """§5's line needs types; Stage A refuses what it can *prove* is a
     function and leaves the rest to Stage B."""
