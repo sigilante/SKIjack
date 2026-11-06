@@ -35,9 +35,10 @@ Two readings this pass takes, both stated in the README:
   branch the parser already fixes the binder count at the arity.
 * **§5's data/function line refuses what it can prove is a function**,
   not everything it cannot prove is data.  With no types, a binder's
-  kind is unknown until Stage B; an equation name, a bare combinator, a
-  lambda, a macro and a partially applied constructor are known
-  functions, and those are refused.
+  kind is unknown until Stage B; a lambda, a macro, a combinator or an
+  equation applied to fewer arguments than it takes, an equation applied
+  to exactly as many whose body is one of these, and a partially applied
+  constructor are known functions, and those are refused.
 """
 
 from __future__ import annotations

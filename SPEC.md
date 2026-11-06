@@ -569,7 +569,7 @@ term is the same with the check on or off
 |---|---|---|
 | a | constructor arity where an application denotes data: inside a quotation, a path literal, a namespace key | `ArityError` |
 | b | case completeness, repetition, mixed types, and a written `step`'s order | `CaseError` / `InterfaceError` |
-| c | the data rule: an operand of `EQ`, the argument of a quotation, a namespace key, a scry path may not be a **provable** function — a lambda, a bare combinator, a macro, an equation with binders, a core, a namespace literal, an under-applied constructor | `DataError` |
+| c | the data rule: an operand of `EQ`, the argument of a quotation, a namespace key, a scry path may not be a **provable** function — a lambda, a macro, an under-applied combinator or equation, a saturated equation whose body is one of these, a core, a namespace literal, an under-applied constructor | `DataError` |
 | d | the interpreter interface of §7 | `InterfaceError` |
 | e | inside a quotation, a name that is neither a constructor of the object type nor a level-0 name; at level 0 every declared type's constructors are ordinary and only the ISA is reserved | `SymbolTableError` |
 | f | unresolved names; duplicate declarations | `ScopeError` |
