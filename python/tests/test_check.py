@@ -203,6 +203,32 @@ def test_EQ_stops_at_a_recursive_equation():
     assert problems(TERM + MAYBE + INTERP + BOOL + "loop = loop\nf = EQ loop loop\n") == []
 
 
+def test_EQ_counts_a_core_parameter_toward_a_siblings_arity():
+    """A sibling is called with the core's parameters first: in ``c p``,
+    ``b p`` is short of ``b y``'s argument, a function, and ``b p Zero`` is
+    saturated, data.  Stage A used to count ``b``'s own binders only."""
+    rejects(TERM + MAYBE + INTERP + BOOL + NAT
+            + "c p := {\n  b y = Suc y\n  f x = EQ (b p) Zero\n}\n",
+            DataError, "argument 1 of 'EQ' is the equation 'b'")
+    assert problems(TERM + MAYBE + INTERP + BOOL + NAT
+                    + "c p := {\n  b y = Suc y\n  f x = EQ (b p Zero) Zero\n}\n") == []
+
+
+def test_EQ_unfolds_a_core_equation_with_the_parameters_bound():
+    """Unfolded, ``b = g`` in ``c g`` names the parameter ``g``, not the
+    top-level equation ``g y = y``, which is a function."""
+    assert problems(TERM + MAYBE + INTERP + BOOL + NAT
+                    + "g y = y\nc g := {\n  b = g\n  f x = EQ (b g) Zero\n}\n") == []
+
+
+def test_EQ_unfolds_a_top_equation_outside_the_core():
+    """``t = h`` is top-level, so its ``h`` is the top-level function
+    ``h x = x`` even when ``t`` is compared inside a core with an ``h``."""
+    rejects(TERM + MAYBE + INTERP + BOOL + NAT
+            + "h x = x\nt = h\nc := {\n  h = Zero\n  f = EQ t t\n}\n",
+            DataError, "the equation 't', whose body is the equation 'h'")
+
+
 def test_EQ_allows_lifted_codes():
     """The behavioural lift at Bool -> Bool (lean-ski ``LiftBool.liftBB``)
     returns compile-time codes, which are data: comparing two lifts is a

@@ -794,6 +794,18 @@ STAGEA: Dict[str, Tuple[Optional[str], str]] = {
     "EQ of a bound name": (None, _H + "EQ x y = x\nf g = EQ g Zero\n"),
     "EQ's third argument a function": (None, _H + "EQ x y z = x\nf := EQ Zero Zero (\\x. x)\n"),
     "EQ of a namespace literal": ("DataError", _B + "f := EQ5 (ns{/nat => <I>}) Nil\n"),
+    # by arity (check.py provably_function, front1 aFn): short of its
+    # arguments a function; an equation saturated is what its body is
+    "EQ of an equation saturated, its body data": (None, _H + "EQ x y = x\ntwo x = Suc (Suc x)\nf := EQ (two Zero) (two Zero)\n"),
+    "EQ of an equation whose body is a combinator short": ("DataError", _H + "EQ x y = x\nk2 = K K\nf := EQ k2 Zero\n"),
+    "EQ of an equation whose body is a lambda": ("DataError", _H + "EQ x y = x\nidf = \\x. x\nf := EQ idf Zero\n"),
+    "EQ of a combinator saturated": (None, _H + "EQ x y = x\nf := EQ (K Zero Zero) Zero\n"),
+    "EQ of a bird saturated": (None, _H + "EQ x y = x\nf := EQ (C K Zero Zero) Zero\n"),
+    "EQ of a recursive equation, unfolded once": (None, _H + "EQ x y = x\nloop = loop\nf := EQ loop Zero\n"),
+    "EQ of a core equation saturated, the parameter first": (None, _H + "EQ x y = x\nc p := {\n  b y = Suc y\n  a x = EQ (b p Zero) Zero\n}\n"),
+    "EQ of a core equation given only the parameter": ("DataError", _H + "EQ x y = x\nc p := {\n  b y = Suc y\n  a x = EQ (b p) Zero\n}\n"),
+    "EQ of a core equation whose body is a parameter": (None, _H + "EQ x y = x\ng y = y\nc g := {\n  b = g\n  a x = EQ (b g) Zero\n}\n"),
+    "EQ of a top equation, unfolded outside the core": ("DataError", _H + "EQ x y = x\nh x = x\nt = h\nc := {\n  h = Zero\n  a x = EQ t Zero\n}\n"),
     "EQ unresolved, of a lambda": ("DataError", _H + "f := EQ (\\x. x) y\n"),
     "a scry at level 0": ("DataError", _B + "f x = ?^/nat\n"),
     "a namespace literal in an equation": ("DataError", _B + "f x = ns{/nat => <I>}\n"),

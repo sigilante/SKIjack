@@ -464,18 +464,28 @@ class _Checker:
             return None
         if nm in self.env.macros:
             return f"the macro {nm!r}"
+        # a core equation's body sees the core's parameters bound, as in
+        # ``core``; a top-level equation's body is outside every core.
+        # front1's ``aFn`` mirrors this rule: change both, and add an edge to
+        # ``selfhost/run1.STAGEA``, which compares them on Avon
         eqn = None
         if core is not None and nm in self.env.core_equations.get(core, ()):
             eqn = self.env.core_equations[core][nm]
+            params = tuple(self.env.cores[core].params)
+            in_core: Optional[str] = core
         elif nm in self.env.equations:
             eqn = self.env.equations[nm]
+            params, in_core = (), None
         if eqn is not None:
-            k = len(eqn.binders)
+            # a sibling is called with the core's parameters first, so they
+            # count toward its arity (``b p y`` saturates ``b y`` in ``c p``)
+            inner = set(params) | set(eqn.binders)
+            k = len(params) + len(eqn.binders)
             if len(args) < k:
                 return f"the equation {nm!r}"
             if len(args) == k and nm not in seen:
-                why = self.provably_function(eqn.body, core,
-                                             set(eqn.binders), seen | {nm})
+                why = self.provably_function(eqn.body, in_core, inner,
+                                             seen | {nm})
                 if why is not None:
                     return f"the equation {nm!r}, whose body is {why}"
             return None

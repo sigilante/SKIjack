@@ -1125,10 +1125,20 @@ aAll ns s = ns |> { NmNil Yes ; NmCons n r (andB (sHas n s) (aAll r s)) }
 aEqPos g c bd h as = h |> { EVar n (eqId n idEQ |> { Yes (aEqArgs g c bd as two) ; No PANo }) ; EApp p PANo ; ECell xs PANo ; EPick k x PANo ; ECase x bs PANo ; ELam x b PANo ; EQuote b fu i PANo ; EScry p PANo ; ENs fs PANo ; ENum k PANo }
 aEqArgs g c bd as k = k |> { Zero PANo ; Suc j (as |> { XNil PANo ; XCons x r (aor (aFn g c bd x |> { Yes pData ; No PANo }) (aEqArgs g c bd r j)) }) }
 -- what Stage A can prove a function (check.py provably_function)
-aFn g c bd e = e |> { EVar n (aFnH g c bd n Zero) ; EApp p (aSpine e XNil |> { Spn h as (h |> { EVar n (aFnH g c bd n (aLenXs as)) ; EApp q No ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b No ; EQuote b fu i No ; EScry p No ; ENs fs No ; ENum k No }) }) ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b Yes ; EQuote b fu i No ; EScry p No ; ENs fs Yes ; ENum k No }
-aFnH g c bd n k = sHas n bd |> { Yes No ; No (orB (isSKI n) (memN n (NmCons idB (NmCons idC (NmCons idW (NmCons idY NmNil))))) |> { Yes Yes ; No (findCI n (gCt g) |> { MC i (i |> { CInfo k2 tn ix ar (notB (geN k ar)) }) ; MCNone (orB (gMac g n) (orB (aEqBs (gDs g) n) (orB (c |> { CxTop No ; CxCore ks np es (aCoreBs es np n) }) (memN n (coreNames (gDs g)))))) }) }) }
-aEqBs ds n = ds |> { DNil No ; DCons d r (d |> { DEq m bs x (eqId m n |> { Yes (notB (isNilN bs)) ; No (aEqBs r n) }) ; DDef m x (aEqBs r n) ; DType m cs fs (aEqBs r n) ; DMacro m ps c x (aEqBs r n) ; DCore m ps es (aEqBs r n) ; DCEq c m rn bs x (aEqBs r n) }) }
-aCoreBs es np n = aFindEq es n |> { MEqNone No ; MEq bs x (geN (lenN bs) (Suc np)) }
+-- by arity: a combinator, constructor or equation applied to fewer
+-- arguments than it takes is a function; an equation applied to exactly as
+-- many is what its body is, unfolded once (sn the equations unfolded); with
+-- more, Stage A cannot tell.  A core equation's binders hold the core's
+-- parameters first, as a sibling's call passes them (check.py
+-- provably_function)
+aFn g c bd e = aFnS g c bd NmNil e
+aFnS g c bd sn e = e |> { EVar n (aFnH g c bd sn n Zero) ; EApp p (aSpine e XNil |> { Spn h as (h |> { EVar n (aFnH g c bd sn n (aLenXs as)) ; EApp q No ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b No ; EQuote b fu i No ; EScry p No ; ENs fs No ; ENum k No }) }) ; ECell xs No ; EPick k x No ; ECase x bs No ; ELam x b Yes ; EQuote b fu i No ; EScry p No ; ENs fs Yes ; ENum k No }
+aFnH g c bd sn n k = sHas n bd |> { Yes No ; No (aCombAr n |> { Zero (findCI n (gCt g) |> { MC i (i |> { CInfo k2 tn ix ar (notB (geN k ar)) }) ; MCNone (gMac g n |> { Yes Yes ; No (aFnEq g c sn n k) }) }) ; Suc j (notB (geN k (Suc j))) }) }
+-- how many arguments a combinator takes, Zero for a name that is not one
+aCombAr n = eqId n idS |> { Yes three ; No (eqId n idK |> { Yes two ; No (eqId n idI |> { Yes one ; No (eqId n idB |> { Yes three ; No (eqId n idC |> { Yes three ; No (eqId n idW |> { Yes two ; No (eqId n idY |> { Yes one ; No Zero }) }) }) }) }) }) }
+aFnEq g c sn n k = c |> { CxTop (aFnTop g sn n k) ; CxCore ks np es (aFindEq es n |> { MEqNone (aFnTop g sn n k) ; MEq bs x (aFnU g c (setOf bs Ns0) sn n k (lenN bs) x) }) }
+aFnTop g sn n k = aFindEq (gDs g) n |> { MEqNone (memN n (coreNames (gDs g))) ; MEq bs x (aFnU g CxTop (setOf bs Ns0) sn n k (lenN bs) x) }
+aFnU g c bd sn n k ar x = geN k ar |> { No Yes ; Yes (andB (eqN k ar) (notB (memN n sn)) |> { No No ; Yes (aFnS g c bd (NmCons n sn) x) }) }
 aFindEq es n = es |> { DNil MEqNone ; DCons d r (d |> { DEq m bs x (eqId m n |> { Yes (MEq bs x) ; No (aFindEq r n) }) ; DDef m x (aFindEq r n) ; DType m cs fs (aFindEq r n) ; DMacro m ps c x (aFindEq r n) ; DCore m ps es2 (aFindEq r n) ; DCEq c m rn bs x (aFindEq r n) }) }
 -- inside a quotation (check.py quoted): a name is the object type's
 -- constructor, or a level-0 name, a constructor saturated; nothing binds
