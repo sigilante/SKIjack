@@ -9,6 +9,8 @@
 **Status ~2026.11.07:  Two papers covering this work have been submitted to journals.  The
 repository is at version 0.2.6 and considered stable and usable.**
 
+Built by N. E. Davis under the auspices of [ZeroAttest Research](https://zeroattest.com).
+
 * N E Davis (2027, in review) A Self-Interpreter for $SKI$: Authoring Semantics for New Symbols. *Journal of Functional Programming*.  doi:10.5281/zenodo.22867957
 * N E Davis (2027a, in review) SKIjack: A Low-Level Native Language for the $SKI$ Calculus.  *The Art, Science, and Engineering of Programming*.
 
