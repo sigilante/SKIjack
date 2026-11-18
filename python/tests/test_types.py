@@ -186,6 +186,31 @@ def test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list(use):
     refuses(NAT + "bool === F | T\nEQ x y = T\n" + use, "an operand of 'EQ' is a function")
 
 
+_EQ_SPELLINGS = ["EQ x y = T\n", "EQ = \\x. \\y. T\n", "EQ := \\x. \\y. T\n",
+                 "EQ = K (K T)\n", "EQ x = \\y. T\n", "eqq x y = T\nEQ = eqq\n"]
+
+
+@pytest.mark.parametrize("spelling", _EQ_SPELLINGS)
+@pytest.mark.parametrize("use", ["eq = EQ\ng := eq K I\n", "ap e = e K I\ng := ap EQ\n",
+                                 "ap e a b = e a b\ng := ap EQ (\\x. \\y. x) T\n"])
+def test_the_data_constraint_holds_however_EQ_is_spelled(spelling, use):
+    """EQ's operands carry the data constraint in its type, not in its
+    binders, so an EQ with fewer than two binders cannot smuggle a function
+    in through an alias or by being passed (the hole fixed in 0.2.8)."""
+    refuses(NAT + "bool === F | T\n" + spelling + use, "a function")
+
+
+@pytest.mark.parametrize("spelling", _EQ_SPELLINGS)
+def test_EQ_on_data_is_accepted_however_it_is_spelled(spelling):
+    skijack.compile(NAT + "bool === F | T\n" + spelling + "eq = EQ\n"
+                    "g := eq [Zero Zero] (cons Zero nil)\n")
+
+
+def test_a_core_local_EQ_carries_the_data_constraint():
+    refuses(NAT + "bool === F | T\nc := {\n  EQ x y = T\n  eq = EQ\n  f = eq K K\n}\n",
+            "a function")
+
+
 def test_EQ_on_data_through_an_alias_is_accepted():
     skijack.compile(NAT + "bool === F | T\nEQ x y = T\neq = EQ\n"
                           "g := eq [Zero Zero] (cons Zero nil)\n")
