@@ -7,7 +7,7 @@
 (Pronounced "sky-jack".)
 
 **Status ~2026.11.07:  Two papers covering this work have been submitted to journals.  The
-repository is at version 0.2.6 and considered stable and usable.**
+repository is at version 0.2.7 and considered stable and usable.**
 
 Built by N. E. Davis under the auspices of [ZeroAttest Research](https://zeroattest.com).
 

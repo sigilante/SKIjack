@@ -1,0 +1,14 @@
+{
+  "title": "SKIjack: a supercombinator language over SKI combinatory logic",
+  "upload_type": "software",
+  "description": "SKIjack is a supercombinator language over the S, K, I combinatory logic, with a reference implementation in Python. Programs are equations grouped into cores and compiled by bracket abstraction to closed terms over {S, K, I}. The surface has one grammar with two lexicons, ASCII and Unicode. Quotation is a compile-time construct, and a two-stage checker keeps provable functions out of data positions. The repository holds the language specification (SPEC.md), the design notes, the reference compiler and checker, and a corpus written in both spellings that also serves as the conformance suite for the Avon C runtime. It accompanies N. E. Davis, \"SKIjack: A Low-Level Native Language for the SKI Calculus\" (in review).",
+  "creators": [
+    {
+      "name": "Davis, N. E.",
+      "affiliation": "ZeroAttest",
+      "orcid": "0000-0002-1131-8319"
+    }
+  ],
+  "license": "MIT",
+  "keywords": ["combinatory logic", "SKI", "supercombinators", "bracket abstraction", "staging", "quotation", "programming language"]
+}
