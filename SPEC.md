@@ -1,6 +1,6 @@
 # SKIjack: the language specification
 
-## Version 0.2.7
+## Version 0.2.8
 
 This document states the SKIjack language as the reference implementation
 (`python/skijack`) compiles it confirmed by its test suite. Every rule
@@ -638,9 +638,18 @@ error (`test_types::test_a_function_is_not_a_datum`).
   how `f x = EQ x PTrue` with `g := f K` is refused although `x` is a
   bare binder (`test_types::test_an_operand_of_eq_may_not_be_a_function_through_a_binder`).
   The constraint reaches into a cell's and a list's components, and a
-  program's `EQ` carries it in its own scheme, so it holds through an
-  alias (`eq = EQ`) and wherever `EQ` is passed
-  (`test_types::test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list`).
+  program's `EQ` carries it on the first two arguments of its own type,
+  however `EQ` is spelled (two binders, a lambda, a definition, a partial
+  application, an alias, or inside a core), so it holds through an alias
+  (`eq = EQ`) and wherever `EQ` is passed
+  (`test_types::test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list`,
+  `test_types::test_the_data_constraint_holds_however_EQ_is_spelled`). Before
+  0.2.8 it was attached to the binders, and an `EQ` with fewer than two
+  binders lost it. `EQ` must therefore be an equation or a definition by
+  an expression: a macro named `EQ` is refused, since its expansion would
+  carry no constraint, and so is an `EQ` that is a quotation, a run, a
+  namespace or a core
+  (`test_types::test_EQ_may_not_be_a_macro_or_a_quotation`).
 - **Literals.** A literal is a numeral of a *numeral type*: a declared
   type with two constructors, the first with no fields and the second
   with one field of the type itself, or `fuel`, the prelude's numerals.

@@ -42,8 +42,9 @@ The operands of ``EQ`` carry a *data* constraint: a type variable so
 marked may be bound to a sum type and never to an arrow, which is how
 ``f x = EQ x PTrue`` followed by ``g := f K`` is refused although ``x``
 is a bare binder.  The constraint reaches into a cell's and a list's
-components, and a program's own ``EQ`` carries it in its scheme, so it
-holds through an alias (``eq = EQ``) and wherever ``EQ`` is passed.
+components, and a program's own ``EQ`` carries it on the first two
+arguments of its type, however it is spelled, so it holds through an
+alias (``eq = EQ``) and wherever ``EQ`` is passed.
 The operands of the numeral operations carry a *numeral* constraint in
 the same way: a numeral type, or an unknown datum that must become one.
 The list operations' lists carry a *list* constraint, which names their
@@ -215,6 +216,7 @@ class _Types:
         self.ctor_of: Dict[str, A.TypeDecl] = {}
         self.env: Dict[str, Scheme] = {}         # program-level names
         self.core_env: Dict[str, Dict[str, Scheme]] = {}
+        self.core_params: Dict[str, int] = {}
         self.mono: Dict[str, Type] = {}          # names in the group being inferred
         self.literals: List[Tuple[TVar, int]] = []   # literals not yet settled
 
@@ -695,6 +697,22 @@ class _Types:
                 if object_t is not None and answer is not None:
                     self.env[d.name] = Scheme((), (), TArrow(object_t, TCon(answer.decl.name)))
 
+        # EQ must be an equation or a definition by an expression, so that
+        # it is an inference item and its type carries the data constraint
+        # (infer_group): a macro is expanded away before inference, and a
+        # quotation, a run, a namespace literal or a core is no equality
+        for d in prog.decls:
+            if getattr(d, "name", None) != "EQ":
+                continue
+            if isinstance(d, A.Macro):
+                self.add(Site("macro", d.name), "'EQ' may not be a macro: its operands "
+                         "must carry the data constraint, which a macro's expansion loses")
+            elif isinstance(d, A.Core) or (isinstance(d, A.Def)
+                                           and isinstance(d.expr, (A.Quote, A.NsLit))):
+                self.add(Site("definition", d.name), "'EQ' must be an equation or a "
+                         "definition by an expression, not a quotation, a run, a "
+                         "namespace or a core")
+
         Item = Tuple[str, Optional[str], Tuple[str, ...], A.Expr, Site]
         items: List[Item] = []
         for d in prog.decls:
@@ -706,6 +724,8 @@ class _Types:
                 for eq in d.equations:
                     items.append((eq.name, d.name, tuple(d.params) + tuple(eq.binders),
                                   eq.body, Site("equation", eq.name, d.name)))
+        #: a core's parameter count, which its equations' types begin with
+        self.core_params = {d.name: len(d.params) for d in prog.decls if isinstance(d, A.Core)}
         keys = {(f"{core}.{name}" if core else name) for name, core, *_ in items}
         #: an interpreter core's name, which denotes its loop, to the loop's key
         loops = {d.name: f"{d.name}.loop" for d in prog.decls
@@ -824,6 +844,16 @@ class _Types:
     def infer_group(self, group: List[str], item_of, expanded) -> None:
         for key in group:
             self.mono[key] = self.fresh()
+            name, core, *_ = item_of[key]
+            if name == "EQ":
+                # equality on data: whatever its spelling (two binders, a
+                # lambda, a definition, an alias, point-free), its first two
+                # operands carry the data constraint in its type, so the
+                # constraint holds through an alias and wherever EQ is passed
+                skip = self.core_params.get(core, 0) if core is not None else 0
+                shape = TArrow(self.fresh(data=True),
+                               TArrow(self.fresh(data=True), self.fresh()))
+                self.unify(self.mono[key], _arrows([self.fresh() for _ in range(skip)], shape))
         results: Dict[str, Type] = {}
         literals: List[Tuple[TVar, int, Site]] = []
         for key in group:
@@ -832,9 +862,8 @@ class _Types:
             try:
                 bound: Dict[str, Type] = {b: self.fresh() for b in binders}
                 if core is None and name == "EQ":
-                    # equality on data: its operands carry the data
-                    # constraint in its scheme, so it holds through an
-                    # alias and wherever EQ is passed (`eq = EQ`, `ap EQ`)
+                    # its binders as well, so an error names the operand
+                    # (the constraint itself is on EQ's type, set above)
                     for b in binders[:2]:
                         self.require_data(bound[b])
                 t = _arrows([bound[b] for b in binders],
