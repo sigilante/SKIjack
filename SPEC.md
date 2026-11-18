@@ -645,7 +645,11 @@ error (`test_types::test_a_function_is_not_a_datum`).
   (`test_types::test_the_data_constraint_holds_through_an_alias_a_cell_and_a_list`,
   `test_types::test_the_data_constraint_holds_however_EQ_is_spelled`). Before
   0.2.8 it was attached to the binders, and an `EQ` with fewer than two
-  binders lost it.
+  binders lost it. `EQ` must therefore be an equation or a definition by
+  an expression: a macro named `EQ` is refused, since its expansion would
+  carry no constraint, and so is an `EQ` that is a quotation, a run, a
+  namespace or a core
+  (`test_types::test_EQ_may_not_be_a_macro_or_a_quotation`).
 - **Literals.** A literal is a numeral of a *numeral type*: a declared
   type with two constructors, the first with no fields and the second
   with one field of the type itself, or `fuel`, the prelude's numerals.

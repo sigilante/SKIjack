@@ -206,6 +206,13 @@ def test_EQ_on_data_is_accepted_however_it_is_spelled(spelling):
                     "g := eq [Zero Zero] (cons Zero nil)\n")
 
 
+@pytest.mark.parametrize("decl", ["EQ x y :=* x y (y F T)\n", "EQ x y :=! T\n", "EQ := <K>\n"])
+def test_EQ_may_not_be_a_macro_or_a_quotation(decl):
+    """A macro is expanded before Stage B infers, so it would carry no data
+    constraint (``eq x y = EQ x y`` then ``eq K K`` was accepted)."""
+    refuses(NAT + "bool === F | T\n" + decl + "g := Zero\n", "'EQ' m")
+
+
 def test_a_core_local_EQ_carries_the_data_constraint():
     refuses(NAT + "bool === F | T\nc := {\n  EQ x y = T\n  eq = EQ\n  f = eq K K\n}\n",
             "a function")

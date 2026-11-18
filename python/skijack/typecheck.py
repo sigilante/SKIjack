@@ -697,6 +697,22 @@ class _Types:
                 if object_t is not None and answer is not None:
                     self.env[d.name] = Scheme((), (), TArrow(object_t, TCon(answer.decl.name)))
 
+        # EQ must be an equation or a definition by an expression, so that
+        # it is an inference item and its type carries the data constraint
+        # (infer_group): a macro is expanded away before inference, and a
+        # quotation, a run, a namespace literal or a core is no equality
+        for d in prog.decls:
+            if getattr(d, "name", None) != "EQ":
+                continue
+            if isinstance(d, A.Macro):
+                self.add(Site("macro", d.name), "'EQ' may not be a macro: its operands "
+                         "must carry the data constraint, which a macro's expansion loses")
+            elif isinstance(d, A.Core) or (isinstance(d, A.Def)
+                                           and isinstance(d.expr, (A.Quote, A.NsLit))):
+                self.add(Site("definition", d.name), "'EQ' must be an equation or a "
+                         "definition by an expression, not a quotation, a run, a "
+                         "namespace or a core")
+
         Item = Tuple[str, Optional[str], Tuple[str, ...], A.Expr, Site]
         items: List[Item] = []
         for d in prog.decls:
