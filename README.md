@@ -3,6 +3,7 @@
 ![](./img/hero.jpg)
 
 [![CI](https://github.com/sigilante/SKIjack/actions/workflows/ci.yml/badge.svg)](https://github.com/sigilante/SKIjack/actions/workflows/ci.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24331464.svg)](https://doi.org/10.5281/zenodo.24331464)
 
 (Pronounced "sky-jack".)
 
